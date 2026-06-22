@@ -981,7 +981,7 @@ body{background:var(--black);color:var(--text);font-family:'Poppins',sans-serif;
       <div class="stat-sub" id="dm-good-eye-sub">Balls taken outside zone</div>
     </div>
     <div class="stat-card" style="flex:1;border-top:2px solid var(--accent);position:relative;">
-      <div class="stat-label">Decision Making Grade <span class="stat-tooltip-btn" data-tip="Decision Making Grade (DMG) measures overall pitch recognition: (Zone swings + Balls taken) ÷ Total pitches × 100. It rewards swinging at strikes and taking balls. Elite: 85–100 · Advanced: 75–84 · Developing: 65–74 · Focus Area: below 65.">?</span></div>
+      <div class="stat-label">Decision Making Grade <span class="stat-tooltip-btn" data-tip="Decision Making Grade (DMG) measures overall pitch recognition: (Zone swings + Balls taken) ÷ Total pitches × 100. It rewards swinging at strikes and taking balls. Elite: 86+ · Advanced: 65–85 · Developing: 50–64 · Focus Area: below 50.">?</span></div>
       <div style="display:flex;align-items:baseline;gap:8px;">
         <span class="stat-value" id="dm-grade-score" style="color:var(--accent)">--</span>
         <span id="dm-grade-letter" style="font-family:&#39;Poppins&#39;,sans-serif;font-weight:900;font-size:28px;color:var(--accent);line-height:1;"></span>
@@ -1120,13 +1120,13 @@ function getTournamentDisplayName(rawId) {
 }
 
 function pitchBelongsToTournamentTeamPitching(p, teamId) {
-  return (p.homeTeamId === teamId && p.topBottom === 'Bottom') ||
-         (p.awayTeamId === teamId && p.topBottom === 'Top');
+  return (p.homeTeamId === teamId && p.topBottom === 'Top') ||
+         (p.awayTeamId === teamId && p.topBottom === 'Bottom');
 }
 
 function pitchBelongsToTournamentTeamBatting(p, teamId) {
-  return (p.homeTeamId === teamId && p.topBottom === 'Top') ||
-         (p.awayTeamId === teamId && p.topBottom === 'Bottom');
+  return (p.homeTeamId === teamId && p.topBottom === 'Bottom') ||
+         (p.awayTeamId === teamId && p.topBottom === 'Top');
 }
 
 function getFilteredPitcherData() {
@@ -1165,13 +1165,14 @@ function getFilteredBatterData() {
       return pitchBelongsToTournamentTeamBatting(p, currentTournamentTeam);
     });
     hits = hits.filter(function(h) {
-      return (h.batterTeam === 'HOME' && h.homeTeamId === currentTournamentTeam) ||
-             (h.batterTeam === 'AWAY' && h.awayTeamId === currentTournamentTeam);
+      return (h.homeTeamId === currentTournamentTeam && h.topBottom === 'Bottom') ||
+             (h.awayTeamId === currentTournamentTeam && h.topBottom === 'Top');
     });
   } else {
-    var filtered = getFilteredData();
-    pitches = filtered.pitches;
-    hits = filtered.hits;
+    pitches = rawData.pitches.filter(function(p){ return p.batterTeam === currentTeam; });
+    var teamBatterNames = {};
+    pitches.forEach(function(p){ if(p.batter) teamBatterNames[p.batter] = true; });
+    hits = (rawData.hits || []).filter(function(h){ return h.batter && teamBatterNames[h.batter]; });
   }
   if (currentPlayer !== 'ALL' && currentPlayerRole === 'batter') {
     pitches = pitches.filter(function(p) { return p.batter === currentPlayer; });
@@ -1181,6 +1182,15 @@ function getFilteredBatterData() {
 }
 
 function getFilteredData() {
+  // In tournament mode, delegate to the appropriate filtered functions
+  if (isTournamentMode && currentTournamentTeam) {
+    if (currentPlayerRole === 'batter') {
+      return getFilteredBatterData();
+    } else {
+      return getFilteredPitcherData();
+    }
+  }
+
   var pitches = rawData.pitches || [];
   var hits    = rawData.hits    || [];
   var hasTeams = pitches.some(function(p) { return p.pitcherTeam; });
@@ -1374,6 +1384,7 @@ function exportPDF() {
     if (metric === 'damageCount') return v>=0.275?'#22c55e':v>=0.175?'#eab308':'#ef4444';
     if (metric === 'goodEye')     return v>=60?'#22c55e':v>=42?'#eab308':'#ef4444';
     if (metric === 'chase')       return v<28?'#22c55e':v<=38?'#eab308':'#ef4444';
+    if (metric === 'zSwing')      return v>87.5?'#eab308':v>=65?'#22c55e':v>=50?'#eab308':'#ef4444';
     if (metric === 'teamBA')      return v>=0.280?'#22c55e':v>=0.200?'#eab308':'#ef4444';
     return null;
   }
@@ -1528,9 +1539,14 @@ function exportPDF() {
     var stk2 = pp.filter(function(x){return ['StrikeCalled','StrikeSwinging','Foul','InPlay'].includes(x.pitchCall);});
     var ev2P = pp.filter(function(x){return x.balls===x.strikes&&x.balls>0;});
     var ev2W = ev2P.filter(function(x){return ['StrikeCalled','StrikeSwinging','Foul','FoulTip','InPlay'].includes(x.pitchCall);});
-    var pegS = (pp.length?stk2.length/pp.length*100*0.30:0)+(fps2.length?fpS2.length/fps2.length*100*0.30:0)+
-               (ev2P.length?ev2W.length/ev2P.length*100*0.20:0)+(sw2.length?wh2.length/sw2.length*100*0.10:0)+
-               (out2.length?ch2.length/out2.length*100*0.10:0);
+    var strikePct=pp.length?stk2.length/pp.length*100:0;
+    var fpsPct=fps2.length?fpS2.length/fps2.length*100:0;
+    var evensPct=ev2P.length?ev2W.length/ev2P.length*100:0;
+    var whiffPct=sw2.length?wh2.length/sw2.length*100:0;
+    var chasePct=out2.length?ch2.length/out2.length*100:0;
+    var whiffScaled=Math.min(100,Math.max(0,(whiffPct-15)/(40-15)*100));
+    var chaseScaled=Math.min(100,Math.max(0,(chasePct-15)/(40-15)*100));
+    var pegS=(strikePct*0.30)+(fpsPct*0.30)+(evensPct*0.15)+(whiffScaled*0.15)+(chaseScaled*0.10);
     var pegL = pegS>=65?'Elite':pegS>=55?'Advanced':pegS>=45?'Developing':'Focus Area';
     var pegC = pegS>=65?'#22c55e':pegS>=55?'#0ea5e9':pegS>=45?'#eab308':'#ef4444';
     var types2={};
@@ -1722,7 +1738,7 @@ function exportPDF() {
   var hWalks   = hitterPitches.filter(function(p){return p.playResult==='Walk'||p.korbb==='Walk';}).length;
   var hKs      = hitterPitches.filter(function(p){return['StrikeoutSwinging','StrikeoutLooking'].includes(p.playResult)||p.korbb==='Strikeout';}).length;
   var hPAs     = new Set(hitterPitches.filter(function(p){return p.batter&&p.inning&&p.topBottom;}).map(function(p){return p.inning+'-'+p.topBottom+'-'+p.batter;})).size;
-  var hEVs     = hits.map(function(h){return h.ev;}).filter(function(v){return v!=null;});
+  var hEVs     = hits.filter(function(h){return h.ev!=null && h.playResult!=='Foul';}).map(function(h){return h.ev;});
   var hAvgEV   = hEVs.length?safeAvg(hEVs).toFixed(1):'—';
   var hMaxEV   = hEVs.length?safeMax(hEVs).toFixed(1):'—';
   var hHardHits= hEVs.filter(function(v){return v>=90;}).length;
@@ -1738,7 +1754,7 @@ function exportPDF() {
   var dcAvg    = dcPAs2>0?'.'+String(Math.round(dcHits/dcPAs2*1000)).padStart(3,'0'):'—';
 
   var hittingSummaryCards=[
-    statCard('TEAM BA',         hBA,'',hBA_hits+' hits / '+hPAs+' PAs (excl. walks)','#0ea5e9',metricColor(hPAs>0?hBA_hits/hPAs:null,'teamBA')),
+    statCard('TEAM BA',         hBA,'',hBA_hits+' hits / '+hPAs+' PAs (excl. walks)',metricColor(hPAs>0?hBA_hits/hPAs:null,'teamBA'),metricColor(hPAs>0?hBA_hits/hPAs:null,'teamBA')),
     statCard('AVG EXIT VELO',   hAvgEV,'mph',hEVs.length+' BIP','#22c55e'),
     statCard('MAX EXIT VELO',   hMaxEV,'mph','Fouls excluded','#0ea5e9'),
     statCard('HARD HIT %',      pct(hHardHits,hEVs.length),'',hHardHits+' balls ≥90 mph','#f59e0b'),
@@ -1756,7 +1772,7 @@ function exportPDF() {
     var bh   =hits.filter(function(h){return h.batter===b;});
     var bHits=bp.filter(function(p){return['Single','Double','Triple','HomeRun'].includes(p.playResult);}).length;
     var bXBH =bp.filter(function(p){return['Double','Triple','HomeRun'].includes(p.playResult);}).length;
-    var bEVs =bh.map(function(h){return h.ev;}).filter(function(v){return v!=null;});
+    var bEVs =bh.filter(function(h){return h.ev!=null && h.playResult!=='Foul';}).map(function(h){return h.ev;});
     var bAvgEV=bEVs.length?safeAvg(bEVs).toFixed(1)+' mph':'—';
     var bHH  =bEVs.length?Math.round(bEVs.filter(function(v){return v>=90;}).length/bEVs.length*100)+'%':'—';
     var bZone=bp.filter(function(p){return inZone(p);});
@@ -1781,12 +1797,13 @@ function exportPDF() {
     var bChCol=metricColor(bOut.length?bCh/bOut.length*100:null,'chase');
     var bWhCol=metricColor(bSw>0?bWh/bSw*100:null,'whiff');
     var bGECol=metricColor(bOut.length?bTk/bOut.length*100:null,'goodEye');
+    var bZCol=metricColor(bZone.length?bZSw/bZone.length*100:null,'zSwing');
     return [
       '<tr>',
       '<td><div class="ph-name">'+fmtN(b)+'</div><div class="ph-sub">'+bHits+' hits · '+bXBH+' XBH</div></td>',
       '<td>'+bAvgEV+'</td>',
       '<td>'+bHH+'</td>',
-      '<td>'+bZPct+'</td>',
+      '<td'+(bZCol?' style="color:'+bZCol+'"':'')+'>'+bZPct+'</td>',
       '<td'+(bChCol?' style="color:'+bChCol+'"':'')+'>'+bChPct+'</td>',
       '<td'+(bWhCol?' style="color:'+bWhCol+'"':'')+'>'+bWhPct+'</td>',
       '<td'+(bGECol?' style="color:'+bGECol+'"':'')+'>'+bGE+'</td>',
@@ -1918,7 +1935,11 @@ function exportPDF() {
     var key=c.b+'-'+c.s;
     var cp=hitterPitches.filter(function(p){return p.balls===c.b&&p.strikes===c.s&&p.pitchCall!=='BallCalled';});
     var cHits=cp.filter(function(p){return['Single','Double','Triple','HomeRun'].includes(p.playResult);}).length;
-    var cPAs=new Set(cp.filter(function(p){return p.batter&&p.inning&&p.topBottom;}).map(function(p){return p.inning+'-'+p.topBottom+'-'+p.batter;})).size;
+    var cPAs=new Set(cp.filter(function(p){
+      return p.batter&&p.inning&&p.topBottom
+        &&p.korbb!=='Walk'&&p.playResult!=='Walk'
+        &&p.pitchCall!=='HitByPitch'&&p.playResult!=='HitByPitch';
+    }).map(function(p){return p.inning+'-'+p.topBottom+'-'+p.batter;})).size;
     var avg2=cPAs>0?'.'+String(Math.round(cHits/cPAs*1000)).padStart(3,'0'):'—';
     var avgNum=cPAs>0?cHits/cPAs:null;
     var color=avgNum==null?'#555':avgNum>=0.25?'#22c55e':avgNum>=0.20?'#eab308':'#ef4444';
@@ -1943,7 +1964,7 @@ function exportPDF() {
   ].join('\n');
 
   // ── PAGE 4 — DECISION MAKING ──
-  var dmPitches=isTournamentMode?hitterPitches:pitches;
+  var dmPitches=hitterPitches;
   var dmSwings =dmPitches.filter(function(p){return['StrikeSwinging','Foul','FoulTip','InPlay'].includes(p.pitchCall);}).length;
   var dmWhiffs =dmPitches.filter(function(p){return p.pitchCall==='StrikeSwinging';}).length;
   var dmZone   =dmPitches.filter(function(p){return inZone(p);});
@@ -1955,8 +1976,8 @@ function exportPDF() {
   var dmTaken  =dmOut.filter(function(p){return p.pitchCall==='BallCalled';}).length;
   var dmGoodDec=dmZSw+dmTaken;
   var dmGrade  =dmPitches.length>0?(dmGoodDec/dmPitches.length*100):0;
-  var dmGradeL =dmGrade>=70?'Elite':dmGrade>=60?'Advanced':dmGrade>=50?'Developing':dmGrade>=40?'Focus Area':'D';
-  var dmGradeC =dmGrade>=70?'#22c55e':dmGrade>=60?'#0ea5e9':dmGrade>=50?'#eab308':'#ef4444';
+  var dmGradeL =dmGrade>=86?'Elite':dmGrade>=65?'Advanced':dmGrade>=50?'Developing':'Focus Area';
+  var dmGradeC =dmGrade>=86?'#22c55e':dmGrade>=65?'#00c8ff':dmGrade>=50?'#eab308':dmGrade>=35?'#f97316':'#ef4444';
 
   var dmTypeRows=function(){
     var rows=[
@@ -1979,11 +2000,11 @@ function exportPDF() {
   var dmGradeCards=[
     statCard('DECISION GRADE',dmGrade.toFixed(1)+' '+dmGradeL,'',dmGoodDec+' good decisions / '+dmPitches.length+' pitches',dmGradeC),
     statCard('GOOD EYE %',   pct(dmTaken,dmOut.length),'',dmTaken+' taken / '+dmOut.length+' outside','#0ea5e9',metricColor(dmOut.length?100*dmTaken/dmOut.length:null,'goodEye')),
-    statCard('CHASE RATE',   pct(dmChase,dmOut.length),'',dmChase+' swings / '+dmOut.length+' outside','#f59e0b',metricColor(dmOut.length?100*dmChase/dmOut.length:null,'chase')),
+    statCard('CHASE RATE',   pct(dmChase,dmOut.length),'',dmChase+' swings / '+dmOut.length+' outside',metricColor(dmOut.length?100*dmChase/dmOut.length:null,'chase'),metricColor(dmOut.length?100*dmChase/dmOut.length:null,'chase')),
     statCard('ZONE WHIFF %', pct(dmZWh,dmZSw),'',dmZWh+' whiffs / '+dmZSw+' zone swings','#eab308'),
-    statCard('HITTER WHIFF %',pct(dmWhiffs,dmSwings),'',dmWhiffs+' misses / '+dmSwings+' swings','#ef4444',metricColor(dmSwings?100*dmWhiffs/dmSwings:null,'whiff')),
+    statCard('HITTER WHIFF %',pct(dmWhiffs,dmSwings),'',dmWhiffs+' misses / '+dmSwings+' swings',metricColor(dmSwings?100*dmWhiffs/dmSwings:null,'whiff'),metricColor(dmSwings?100*dmWhiffs/dmSwings:null,'whiff')),
     statCard('CHASE WHIFF %',pct(dmOutWh,dmChase),'',dmOutWh+' whiffs on '+dmChase+' outside swings','#a855f7'),
-    statCard('Z-SWING %',    pct(dmZSw,dmZone.length),'',dmZSw+' swings / '+dmZone.length+' zone pitches','#22c55e'),
+    statCard('Z-SWING %',    pct(dmZSw,dmZone.length),'',dmZSw+' swings / '+dmZone.length+' zone pitches',metricColor(dmZone.length?100*dmZSw/dmZone.length:null,'zSwing'),metricColor(dmZone.length?100*dmZSw/dmZone.length:null,'zSwing')),
   ].join('');
 
   var page4a = [
@@ -2126,6 +2147,8 @@ function shareReport() {
       if (metric === 'damageCount')    return v>=0.275?'#22c55e':v>=0.175?'#eab308':'#ef4444';
       if (metric === 'goodEye')        return v>=60?'#22c55e':v>=42?'#eab308':'#ef4444';
       if (metric === 'chase')          return v<28?'#22c55e':v<=38?'#eab308':'#ef4444';
+      if (metric === 'zSwing')         return v>87.5?'#eab308':v>=65?'#22c55e':v>=50?'#eab308':'#ef4444';
+      if (metric === 'teamBA')         return v>=0.280?'#22c55e':v>=0.200?'#eab308':'#ef4444';
       return '#e8eaf0';
     }
     function initials(n){ return fmtN(n).split(' ').map(function(w){return w[0];}).filter(Boolean).join('').slice(0,2).toUpperCase(); }
@@ -2163,23 +2186,33 @@ function shareReport() {
       awayTeamPitches.forEach(function(x){var tb=x.topBottom||'null';topValues2[tb]=(topValues2[tb]||0)+1;});
       console.log('FILTER DEBUG awayTeam topBottom distribution: '+JSON.stringify(topValues2));
       activePitches=pitches.filter(function(x){
-        return (x.homeTeamId===tid&&x.topBottom==='Bottom')||(x.awayTeamId===tid&&x.topBottom==='Top');
+        return (x.homeTeamId===tid&&x.topBottom==='Top')||(x.awayTeamId===tid&&x.topBottom==='Bottom');
       });
       activeHitPitches=pitches.filter(function(x){
-        // Use batterTeam directly — topBottom is inconsistent across CSV files
-        return (x.homeTeamId===tid&&x.batterTeam==='HOME')||(x.awayTeamId===tid&&x.batterTeam==='AWAY');
+        return (x.homeTeamId===tid&&x.topBottom==='Bottom')||(x.awayTeamId===tid&&x.topBottom==='Top');
       });
       activeHits=hits.filter(function(x){
-        return (x.homeTeamId===tid&&x.batterTeam==='HOME')||(x.awayTeamId===tid&&x.batterTeam==='AWAY');
+        return (x.homeTeamId===tid&&x.topBottom==='Bottom')||(x.awayTeamId===tid&&x.topBottom==='Top');
       });
+    var sampleActivePitch = activePitches[0];
+    var sampleActiveHit = activeHitPitches[0];
+    console.log('FILTER DEBUG sample activePitch pitcherTeam='+(sampleActivePitch?sampleActivePitch.pitcherTeam:'none')+' batterTeam='+(sampleActivePitch?sampleActivePitch.batterTeam:'none')+' homeTeamId='+(sampleActivePitch?sampleActivePitch.homeTeamId:'none')+' awayTeamId='+(sampleActivePitch?sampleActivePitch.awayTeamId:'none'));
+    console.log('FILTER DEBUG sample activeHitPitch pitcherTeam='+(sampleActiveHit?sampleActiveHit.pitcherTeam:'none')+' batterTeam='+(sampleActiveHit?sampleActiveHit.batterTeam:'none')+' homeTeamId='+(sampleActiveHit?sampleActiveHit.homeTeamId:'none')+' awayTeamId='+(sampleActiveHit?sampleActiveHit.awayTeamId:'none'));
       console.log('FILTER DEBUG activePitches='+activePitches.length);
       console.log('FILTER DEBUG activeHitPitches='+activeHitPitches.length);
       console.log('FILTER DEBUG activeHits='+activeHits.length);
     } else if(!p.isTournamentMode&&p.currentTeam&&p.currentTeam!=='ALL'){
       activePitches=pitches.filter(function(x){return x.pitcherTeam===p.currentTeam;});
       activeHitPitches=pitches.filter(function(x){return x.batterTeam===p.currentTeam;});
-      activeHits=hits.filter(function(x){return x.batterTeam===p.currentTeam;});
+      var sgTeamBatters={};
+      activeHitPitches.forEach(function(x){if(x.batter)sgTeamBatters[x.batter]=true;});
+      activeHits=hits.filter(function(x){return x.batter&&sgTeamBatters[x.batter];});
     }
+    var batterMapPitches=p.isTournamentMode&&effectiveTid?pitches.filter(function(x){
+      return (x.homeTeamId===tid&&x.topBottom==='Bottom')||(x.awayTeamId===tid&&x.topBottom==='Top');
+    }):activeHitPitches;
+    var mobileHTML=buildMobileHTML(p);
+    var mobileB64=btoa(unescape(encodeURIComponent(mobileHTML)));
     // Build valid batters from activeHitPitches
     var validBatters={};
     activeHitPitches.forEach(function(x){if(x.batter)validBatters[x.batter]=true;});
@@ -2193,21 +2226,6 @@ function shareReport() {
       Object.keys(validBatters).forEach(function(name){
         if(activePitcherNames[name])delete validBatters[name];
       });
-    }
-
-    // Also build valid batters from the pitching side perspective:
-    // A legitimate Blinn batter should be someone who faced Blinn pitchers.
-    // Re-filter activeHitPitches to only include pitches where the batter
-    // is NOT one of Blinn's own pitchers.
-    if(p.isTournamentMode && effectiveTid){
-      var ourPitchers={};
-      activePitches.forEach(function(x){if(x.pitcher)ourPitchers[x.pitcher]=true;});
-      activeHitPitches=activeHitPitches.filter(function(x){
-        return x.batter && !ourPitchers[x.batter];
-      });
-      // Rebuild validBatters from cleaned activeHitPitches
-      validBatters={};
-      activeHitPitches.forEach(function(x){if(x.batter)validBatters[x.batter]=true;});
     }
 
     if(Object.keys(validBatters).length>0){
@@ -2241,7 +2259,24 @@ function shareReport() {
     // â”€â”€ Pitching stats â”€â”€
     var pitchTypes=getTypes(activePitches);
     var strikes=activePitches.filter(function(x){return['StrikeCalled','StrikeSwinging','Foul','FoulTip','InPlay'].includes(x.pitchCall);}).length;
-    var fps=activePitches.filter(function(x){return x.balls===0&&x.strikes===0;});
+    var fpPaGroups={};
+    activePitches.forEach(function(x){
+      if(!x.batter||!x.inning)return;
+      var pk=x.inning+'-'+(x.topBottom||'')+'-'+x.batter+'-'+(x.homeTeamId||'')+'-'+(x.awayTeamId||'');
+      if(!fpPaGroups[pk])fpPaGroups[pk]=[];
+      fpPaGroups[pk].push(x);
+    });
+    var fps=[];
+    Object.keys(fpPaGroups).forEach(function(pk){
+      var group=fpPaGroups[pk];
+      for(var i=0;i<group.length;i++){
+        var p=group[i];
+        if(p.balls===0&&p.strikes===0&&['StrikeCalled','StrikeSwinging','Foul','FoulTip','BallCalled','InPlay','HitByPitch'].indexOf(p.pitchCall)>=0){
+          fps.push(p);
+          break;
+        }
+      }
+    });
     var fpStrikes=fps.filter(function(x){return['StrikeCalled','StrikeSwinging','Foul','FoulTip','InPlay'].includes(x.pitchCall);});
     var evenPP=activePitches.filter(function(x){return x.balls===x.strikes&&x.balls>0;});
     var evenWins=evenPP.filter(function(x){return['StrikeCalled','StrikeSwinging','Foul','FoulTip','InPlay'].includes(x.pitchCall);});
@@ -2335,6 +2370,33 @@ function shareReport() {
           playerSets[nm].fps[pk]=true;
         }
       });
+      // Override 0-1: recalculate as first pitch strikes (PA-deduplicated)
+      var fpValidCalls=['StrikeCalled','StrikeSwinging','Foul','FoulTip','BallCalled','InPlay','HitByPitch'];
+      var fpStrikeCalls2=['StrikeCalled','StrikeSwinging','Foul','FoulTip','InPlay'];
+      teamSets['0-1']={};
+      Object.keys(playerSets).forEach(function(nm){if(playerSets[nm])playerSets[nm]['0-1']={};});
+      var fpGroups2={};
+      pitchList.forEach(function(x){
+        if(!x.batter||!x.inning)return;
+        var pk2=x.inning+'-'+(x.topBottom||'')+'-'+x.batter;
+        if(!fpGroups2[pk2])fpGroups2[pk2]=[];
+        fpGroups2[pk2].push(x);
+      });
+      Object.keys(fpGroups2).forEach(function(pk2){
+        var fp=null;
+        for(var fi=0;fi<fpGroups2[pk2].length;fi++){
+          var p=fpGroups2[pk2][fi];
+          if(p.balls===0&&p.strikes===0&&fpValidCalls.indexOf(p.pitchCall)>=0){fp=p;break;}
+        }
+        if(!fp||fpStrikeCalls2.indexOf(fp.pitchCall)<0)return;
+        teamSets['0-1'][pk2]=true;
+        var nm2=fp[nameField];
+        if(nm2&&!/undefined/i.test(nm2)){
+          if(nameField==='batter'&&Object.keys(validBatters).length>0&&!validBatters[nm2])return;
+          if(!playerSets[nm2]){playerSets[nm2]={fps:{}};COG.forEach(function(c){playerSets[nm2][c.b+'-'+c.s]={};});}
+          playerSets[nm2]['0-1'][pk2]=true;
+        }
+      });
       var teamFPS={};
       pitchList.filter(function(x){return x.balls===0&&x.strikes===0&&['StrikeSwinging','Foul','FoulTip','InPlay'].includes(x.pitchCall);})
         .forEach(function(x){var pk=x.inning+'-'+(x.topBottom||'')+'-'+(x[nameField]||'');if(pk)teamFPS[pk]=true;});
@@ -2357,7 +2419,7 @@ function shareReport() {
         var sublabel=key==='0-1'?'1st pitch strikes':'PAs reached';
         if(isHitter&&key==='0-1'){
           var fps=csd.team['fps']||0;
-          sublabel='1st pitch strikes'+(fps>0?'<br><span style="font-size:9px;color:#8891a4">* '+fps+' first-pitch swings in play</span>':'');
+          sublabel='1st pitch strikes'+(fps>0?'<br><span style="font-size:9px;color:#8891a4">* '+fps+' swings</span>':'');
         }
         return '<div style="background:'+col.bg+';border:1px solid '+col.border+';border-radius:8px;padding:12px 10px;">'+
           '<div style="font-size:12px;font-weight:700;color:'+col.text+'">'+key+'</div>'+
@@ -2384,7 +2446,7 @@ function shareReport() {
                 var val=(csd.players[nm]&&csd.players[nm][key])||0;
                 var col=cntColor(key);
                 var extra='';
-                if(isHitter&&key==='0-1'&&csd.players[nm]){var fp=csd.players[nm].fps||0;if(fp>0)extra='<br><span style="font-size:8px;color:#8891a4">*'+fp+' in play</span>';}
+                if(isHitter&&key==='0-1'&&csd.players[nm]){var fp=csd.players[nm].fps||0;if(fp>0)extra='<br><span style="font-size:8px;color:#8891a4">*'+fp+' swings</span>';}
                 return '<td style="text-align:center;padding:'+pad+';background:'+col.bg+';color:'+col.num+';font-weight:700">'+val+extra+'</td>';}).join('')+
             '</tr>';
           }).join('')+'</tbody></table>';
@@ -2403,7 +2465,136 @@ function shareReport() {
     }
 
     var csdPitch=buildCountData(activePitches,'pitcher');
-    var csdHit=buildCountData(activeHitPitches,'batter');
+    var csdHitPitches=p.isTournamentMode&&effectiveTid?batterMapPitches:activeHitPitches;
+    var savedValidBatters=validBatters;
+    validBatters={};
+    csdHitPitches.forEach(function(x){if(x.batter)validBatters[x.batter]=true;});
+    console.log('CSDHIT DEBUG isTournamentMode='+p.isTournamentMode+' effectiveTid='+effectiveTid+' csdHitPitches='+csdHitPitches.length+' validBatters='+Object.keys(validBatters).join(',').slice(0,100));
+    var csdHit=buildCountData(csdHitPitches,'batter');
+    var batterMap={};
+    var firstHitBatter = activeHitPitches.filter(function(x){return x.batter;})[0];
+    console.log('BATTERMAP PRE-DEBUG firstBatter='+(firstHitBatter?firstHitBatter.batter:'none')+' inValidBatters='+(firstHitBatter?!!validBatters[firstHitBatter.batter]:'n/a')+' validBattersKeys='+Object.keys(validBatters).slice(0,3).join(','));
+    batterMapPitches.forEach(function(x){
+      if(!x.batter)return;
+      if(p.isTournamentMode&&effectiveTid&&Object.keys(validBatters).length>0&&!validBatters[x.batter])return;
+      if(!batterMap[x.batter])batterMap[x.batter]=[];
+      batterMap[x.batter].push(x);
+    });
+    // â”€â”€ Hitter highlights rows (matches app layout) â”€â”€
+    console.log('BATTERMAP DEBUG keys='+Object.keys(batterMap).length+' first batter='+Object.keys(batterMap)[0]+' pitches='+( batterMap[Object.keys(batterMap)[0]]?batterMap[Object.keys(batterMap)[0]].length:0 )+' activeHitPitches='+activeHitPitches.length);
+    var hitterHighlightsHTML=Object.keys(batterMap).map(function(b){
+      var bp=batterMap[b];
+      var bh=activeHits.filter(function(h){return h.batter===b;});
+      if(bh.length===0){
+        bh=hits.filter(function(h){return h.batter===b&&((h.homeTeamId===effectiveTid)||(h.awayTeamId===effectiveTid));});
+      }
+      var bHits=bp.filter(function(x){return['Single','Double','Triple','HomeRun'].includes(x.playResult);}).length;
+      var bXBH=bp.filter(function(x){return['Double','Triple','HomeRun'].includes(x.playResult);}).length;
+      var bEVs=bh.filter(function(h){return h.ev!=null && h.playResult!=='Foul';}).map(function(h){return h.ev;});
+      var bHH=bEVs.filter(function(v){return v>=90;}).length;
+      var bZone=bp.filter(function(x){return inZone(x);});
+      var bZSw=bZone.filter(function(x){return['StrikeSwinging','Foul','InPlay'].includes(x.pitchCall);}).length;
+      var bOut=bp.filter(function(x){return!inZone(x);});
+      var bCh=bOut.filter(function(x){return['StrikeSwinging','Foul','InPlay'].includes(x.pitchCall);}).length;
+      var bSw=bp.filter(function(x){return['StrikeSwinging','Foul','InPlay'].includes(x.pitchCall);}).length;
+      var bWh=bp.filter(function(x){return x.pitchCall==='StrikeSwinging';}).length;
+      var bTk=bOut.filter(function(x){return x.pitchCall==='BallCalled';}).length;
+      var pdgScore=bZone.length?(
+        (bOut.length?(bTk/bOut.length*100):0)*0.30 +
+        ((1-(bOut.length?bCh/bOut.length:0))*100)*0.30 +
+        ((1-(bSw>0?bWh/bSw:0))*100)*0.25 +
+        (bZSw/bZone.length*100)*0.15
+      ):null;
+      var pdgL=pdgScore==null?'&#8212;':pdgScore>=75?'Elite':pdgScore>=65?'Advanced':pdgScore>=55?'Developing':'Focus Area';
+      var pdgC=pdgScore==null?'#8891a4':pdgScore>=75?'#22c55e':pdgScore>=65?'#0ea5e9':pdgScore>=55?'#eab308':'#ef4444';
+      var pdgBg=pdgScore==null?'transparent':pdgScore>=75?'rgba(34,197,94,0.1)':pdgScore>=65?'rgba(14,165,233,0.1)':pdgScore>=55?'rgba(234,179,8,0.1)':'rgba(239,68,68,0.1)';
+      var bChPct=bOut.length?(bCh/bOut.length*100):null;
+      var bWhPct=bSw>0?(bWh/bSw*100):null;
+      var bGEPct=bOut.length?(bTk/bOut.length*100):null;
+      return '<div style="display:flex;align-items:center;gap:0;background:#111827;border:1px solid #1e2330;border-radius:8px;padding:12px 16px;margin-bottom:8px;">'+
+        '<div style="min-width:200px;">'+
+          '<div style="font-weight:700;font-size:15px;color:#e8eaf0;">'+fmtN(b)+'</div>'+
+          '<div style="font-size:11px;color:#8891a4;margin-top:2px;">'+bHits+' hits &#183; '+bXBH+' XBH &#183; '+bp.length+' PA</div>'+
+        '</div>'+
+        '<div style="flex:1;display:grid;grid-template-columns:repeat(6,1fr);gap:4px;">'+
+          [
+            {l:'AVG EV',v:bEVs.length?safeAvg(bEVs).toFixed(1)+' mph':'&#8212;',c:'#e8eaf0'},
+            {l:'HARD HIT %',v:bEVs.length?Math.round(bHH/bEVs.length*100)+'%':'&#8212;',c:'#e8eaf0'},
+            {l:'Z-SWING %',v:bZone.length?(bZSw/bZone.length*100).toFixed(1)+'%':'&#8212;',c:metricColor(bZone.length?bZSw/bZone.length*100:null,'zSwing')},
+            {l:'CHASE %',v:bOut.length?(bCh/bOut.length*100).toFixed(1)+'%':'&#8212;',c:metricColor(bChPct,'chase')},
+            {l:'WHIFF %',v:bSw>0?(bWh/bSw*100).toFixed(1)+'%':'&#8212;',c:metricColor(bWhPct,'whiff')},
+            {l:'GOOD EYE %',v:bOut.length?(bTk/bOut.length*100).toFixed(1)+'%':'&#8212;',c:metricColor(bGEPct,'goodEye')},
+          ].map(function(s){
+            return '<div style="text-align:center;padding:6px;background:#0d1117;border-radius:6px;">'+
+              '<div style="font-size:9px;font-weight:700;letter-spacing:0.05em;text-transform:uppercase;color:#8891a4;margin-bottom:3px;">'+s.l+'</div>'+
+              '<div style="font-size:15px;font-weight:700;color:'+s.c+';">'+s.v+'</div>'+
+            '</div>';
+          }).join('')+
+        '</div>'+
+        '<div style="min-width:160px;text-align:right;margin-left:12px;">'+
+          '<div style="background:'+pdgBg+';border:2px solid '+pdgC+';border-radius:8px;padding:8px 14px;display:inline-block;">'+
+            '<div style="font-size:9px;font-weight:700;letter-spacing:0.05em;text-transform:uppercase;color:#8891a4;margin-bottom:2px;">PDG</div>'+
+            '<div style="font-size:16px;font-weight:900;color:'+pdgC+';">'+pdgL+'</div>'+
+            (pdgScore!=null?'<div style="font-size:11px;color:'+pdgC+';opacity:0.8;">('+pdgScore.toFixed(1)+')</div>':'')+
+            '<div style="margin-top:4px;display:flex;align-items:center;justify-content:center;">'+
+              '<span class="tip-wrap">'+
+                '<span class="tip-icon" onclick="tipToggle(this)">?</span>'+
+                '<div class="tip-box">'+
+                  '<strong style="color:#e8eaf0;">Plate Discipline Grade</strong><br>'+
+                  'Grades a hitter\'s plate discipline based on pitch recognition (30%), chase avoidance (30%), contact ability (25%), and zone swing rate (15%).'+
+                  '<br><br><span style="color:#8891a4;font-size:10px;">Elite: 75+ &nbsp;·&nbsp; Advanced: 65–74 &nbsp;·&nbsp; Developing: 55–64 &nbsp;·&nbsp; Focus Area: &lt;55</span>'+
+                '</div>'+
+              '</span>'+
+            '</div>'+
+          '</div>'+
+        '</div>'+
+      '</div>';
+    }).join('');
+
+    // â”€â”€ Hitter comparison cards (matches app layout) â”€â”€
+    var hitterComparisonHTML='<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(380px,1fr));gap:12px;margin-bottom:16px;">'+
+      Object.keys(batterMap).map(function(b){
+        var bp=batterMap[b];
+        var bh=activeHits.filter(function(h){return h.batter===b;});
+        if(bh.length===0){
+          bh=hits.filter(function(h){return h.batter===b&&((h.homeTeamId===effectiveTid)||(h.awayTeamId===effectiveTid));});
+        }
+        var bEVs=bh.filter(function(h){return h.ev!=null && h.playResult!=='Foul';}).map(function(h){return h.ev;});
+        var bZone=bp.filter(function(x){return inZone(x);});
+        var bZSw=bZone.filter(function(x){return['StrikeSwinging','Foul','InPlay'].includes(x.pitchCall);}).length;
+        var bOut=bp.filter(function(x){return!inZone(x);});
+        var bCh=bOut.filter(function(x){return['StrikeSwinging','Foul','InPlay'].includes(x.pitchCall);}).length;
+        var bBIPs=bh.length;
+        var bPAcount = new Set(
+          bp.filter(function(x){ return x.batter && x.inning; })
+            .map(function(x){ return x.inning + '-' + (x.topBottom||'') + '-' + x.batter; })
+        ).size;
+        return '<div style="background:#111827;border:1px solid #1e2330;border-radius:8px;padding:16px;">'+
+          '<div style="display:flex;align-items:center;gap:10px;margin-bottom:12px;">'+
+            '<div style="width:44px;height:44px;border-radius:50%;background:rgba(34,197,94,0.12);border:2px solid #22c55e;display:flex;align-items:center;justify-content:center;font-weight:900;font-size:15px;color:#22c55e;flex-shrink:0;">'+initials(b)+'</div>'+
+            '<div>'+
+              '<div style="font-weight:700;font-size:15px;color:#e8eaf0;">'+fmtN(b)+'</div>'+
+              '<div style="font-size:11px;color:#8891a4;margin-top:1px;">'+bPAcount+' PA &#183; '+bp.length+' pitches &#183; '+bBIPs+' batted balls</div>'+
+            '</div>'+
+          '</div>'+
+          '<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;">'+
+            [
+              {l:'PA',v:String(bPAcount),c:'#e8eaf0'},
+              {l:'AVG EV',v:bEVs.length?safeAvg(bEVs).toFixed(1)+' mph':'&#8212;',c:'#e8eaf0'},
+              {l:'Z-SWING %',v:bZone.length?(bZSw/bZone.length*100).toFixed(1)+'%':'&#8212;',c:metricColor(bZone.length?bZSw/bZone.length*100:null,'zSwing')},
+              {l:'CHASE %',v:bOut.length?(bCh/bOut.length*100).toFixed(1)+'%':'&#8212;',c:'#ef4444'},
+            ].map(function(s){
+              return '<div style="background:#0d1117;border-radius:6px;padding:10px;text-align:center;">'+
+                '<div style="font-size:9px;font-weight:700;letter-spacing:0.05em;text-transform:uppercase;color:#8891a4;margin-bottom:4px;">'+s.l+'</div>'+
+                '<div style="font-size:20px;font-weight:900;color:'+s.c+';">'+s.v+'</div>'+
+              '</div>';
+            }).join('')+
+          '</div>'+
+        '</div>';
+      }).join('')+
+    '</div>';
+
+    validBatters=savedValidBatters;
 
     // â”€â”€ Hitting stats â”€â”€
     var hBA_hits=activeHitPitches.filter(function(x){return['Single','Double','Triple','HomeRun'].includes(x.playResult);}).length;
@@ -2411,7 +2602,7 @@ function shareReport() {
     var hWalks=activeHitPitches.filter(function(x){return x.playResult==='Walk'||x.korbb==='Walk';}).length;
     var hKs=activeHitPitches.filter(function(x){return['StrikeoutSwinging','StrikeoutLooking'].includes(x.playResult)||x.korbb==='Strikeout';}).length;
     var hPAs=new Set(activeHitPitches.filter(function(x){return x.batter&&x.inning&&x.topBottom;}).map(function(x){return x.inning+'-'+x.topBottom+'-'+x.batter;})).size;
-    var hEVs=activeHits.map(function(h){return h.ev;}).filter(function(v){return v!=null;});
+    var hEVs=activeHits.filter(function(h){return h.ev!=null && h.playResult!=='Foul';}).map(function(h){return h.ev;});
     var hBA=hPAs>0?'.'+String(Math.round(hBA_hits/hPAs*1000)).padStart(3,'0'):'&#8212;';
     var hZone=activeHitPitches.filter(function(x){return inZone(x);});
     var hZSw=hZone.filter(function(x){return['StrikeSwinging','Foul','InPlay'].includes(x.pitchCall);}).length;
@@ -2425,7 +2616,7 @@ function shareReport() {
     var dcH=dcA.filter(function(x){return['Single','Double','Triple','HomeRun'].includes(x.playResult);}).length;
     var dcPAs=new Set(dcA.filter(function(x){return x.batter&&x.inning&&x.topBottom;}).map(function(x){return x.inning+'-'+x.topBottom+'-'+x.batter;})).size;
     var dcAvg=dcPAs>0?'.'+String(Math.round(dcH/dcPAs*1000)).padStart(3,'0'):'&#8212;';
-    var hBIPs=activeHits.length;
+    var hBIPs=activeHits.filter(function(x){return x.playResult!=='Foul';}).length;
     var hMaxEV=hEVs.length?safeMax(hEVs).toFixed(1):'&#8212;';
     var hAvgEV=hEVs.length?safeAvg(hEVs).toFixed(1):'&#8212;';
 
@@ -2453,7 +2644,11 @@ function shareReport() {
       var key=c.b+'-'+c.s;
       var cp=activeHitPitches.filter(function(x){return x.balls===c.b&&x.strikes===c.s&&x.pitchCall!=='BallCalled';});
       var cHits=cp.filter(function(x){return['Single','Double','Triple','HomeRun'].includes(x.playResult);}).length;
-      var cPAs=new Set(cp.filter(function(x){return x.batter&&x.inning&&x.topBottom;}).map(function(x){return x.inning+'-'+x.topBottom+'-'+x.batter;})).size;
+      var cPAs=new Set(cp.filter(function(p){
+      return p.batter&&p.inning&&p.topBottom
+        &&p.korbb!=='Walk'&&p.playResult!=='Walk'
+        &&p.pitchCall!=='HitByPitch'&&p.playResult!=='HitByPitch';
+    }).map(function(p){return p.inning+'-'+p.topBottom+'-'+p.batter;})).size;
       var avg2=cPAs>0?'.'+String(Math.round(cHits/cPAs*1000)).padStart(3,'0'):'&#8212;';
       var avgNum=cPAs>0?cHits/cPAs:null;
       var bgColor=avgNum==null?'transparent':avgNum>=0.25?'rgba(34,197,94,0.2)':avgNum>=0.20?'rgba(234,179,8,0.2)':'rgba(239,68,68,0.2)';
@@ -2485,11 +2680,14 @@ function shareReport() {
       var stk2=pp.filter(function(x){return['StrikeCalled','StrikeSwinging','Foul','InPlay'].includes(x.pitchCall);});
       var ev2P=pp.filter(function(x){return x.balls===x.strikes&&x.balls>0;});
       var ev2W=ev2P.filter(function(x){return['StrikeCalled','StrikeSwinging','Foul','FoulTip','InPlay'].includes(x.pitchCall);});
-      return (pp.length?stk2.length/pp.length*100*0.30:0)+
-             (fps2.length?fpS2.length/fps2.length*100*0.30:0)+
-             (ev2P.length?ev2W.length/ev2P.length*100*0.20:0)+
-             (sw2.length?wh2.length/sw2.length*100*0.10:0)+
-             (out2.length?ch2.length/out2.length*100*0.10:0);
+      var strikePct=pp.length?stk2.length/pp.length*100:0;
+      var fpsPct=fps2.length?fpS2.length/fps2.length*100:0;
+      var evensPct=ev2P.length?ev2W.length/ev2P.length*100:0;
+      var whiffPct=sw2.length?wh2.length/sw2.length*100:0;
+      var chasePct=out2.length?ch2.length/out2.length*100:0;
+      var whiffScaled=Math.min(100,Math.max(0,(whiffPct-15)/(40-15)*100));
+      var chaseScaled=Math.min(100,Math.max(0,(chasePct-15)/(40-15)*100));
+      return (strikePct*0.30)+(fpsPct*0.30)+(evensPct*0.15)+(whiffScaled*0.15)+(chaseScaled*0.10);
     });
     var teamAvgPeg = teamPegScores.length ? teamPegScores.reduce(function(s,v){return s+v;},0)/teamPegScores.length : null;
     var teamPegL = teamAvgPeg==null?'&#8212;':teamAvgPeg>=65?'Elite':teamAvgPeg>=55?'Advanced':teamAvgPeg>=45?'Developing':'Focus Area';
@@ -2507,17 +2705,27 @@ function shareReport() {
       var stk2=pp.filter(function(x){return['StrikeCalled','StrikeSwinging','Foul','InPlay'].includes(x.pitchCall);});
       var ev2P=pp.filter(function(x){return x.balls===x.strikes&&x.balls>0;});
       var ev2W=ev2P.filter(function(x){return['StrikeCalled','StrikeSwinging','Foul','FoulTip','InPlay'].includes(x.pitchCall);});
-      var pegS=(pp.length?stk2.length/pp.length*100*0.30:0)+(fps2.length?fpS2.length/fps2.length*100*0.30:0)+
-               (ev2P.length?ev2W.length/ev2P.length*100*0.20:0)+(sw2.length?wh2.length/sw2.length*100*0.10:0)+
-               (out2.length?ch2.length/out2.length*100*0.10:0);
+      var strikePct=pp.length?stk2.length/pp.length*100:0;
+      var fpsPct=fps2.length?fpS2.length/fps2.length*100:0;
+      var evensPct=ev2P.length?ev2W.length/ev2P.length*100:0;
+      var whiffPct=sw2.length?wh2.length/sw2.length*100:0;
+      var chasePct=out2.length?ch2.length/out2.length*100:0;
+      var whiffScaled=Math.min(100,Math.max(0,(whiffPct-15)/(40-15)*100));
+      var chaseScaled=Math.min(100,Math.max(0,(chasePct-15)/(40-15)*100));
+      var pegS=(strikePct*0.30)+(fpsPct*0.30)+(evensPct*0.15)+(whiffScaled*0.15)+(chaseScaled*0.10);
       var pegL=pegS>=65?'Elite':pegS>=55?'Advanced':pegS>=45?'Developing':'Focus Area';
       var pegC=pegS>=65?'#22c55e':pegS>=55?'#0ea5e9':pegS>=45?'#eab308':'#ef4444';
       var pegBg=pegS>=65?'rgba(34,197,94,0.1)':pegS>=55?'rgba(14,165,233,0.1)':pegS>=45?'rgba(234,179,8,0.1)':'rgba(239,68,68,0.1)';
       var stkPct=pp.length?stk2.length/pp.length*100:null;
+      var fbV=pp.filter(function(x){return x.pitchType==='Fastball'||x.pitchType==='Four-Seam';}).map(function(x){return x.spd;}).filter(Boolean);
+      var fbMin=fbV.length?Math.min.apply(null,fbV).toFixed(1):null;
+      var fbMax=fbV.length?Math.max.apply(null,fbV).toFixed(1):null;
+      var fbRangeStr=fbV.length?('Fastball Velocity: '+fbMin+'–'+fbMax+' mph'+(parseFloat(fbMax)>=90?' 🔥':'')):'';
       return '<div style="display:flex;align-items:center;gap:0;background:#111827;border:1px solid #1e2330;border-radius:8px;padding:12px 16px;margin-bottom:8px;">'+
         '<div style="min-width:180px;">'+
           '<div style="font-weight:700;font-size:15px;color:#e8eaf0;">'+fmtN(nm)+'</div>'+
           '<div style="font-size:11px;color:#8891a4;margin-top:2px;">'+pp.length+' pitches</div>'+
+          (fbRangeStr?'<div style="font-size:11px;color:#8891a4;margin-top:2px;">'+fbRangeStr+'</div>':'')+
         '</div>'+
         '<div style="flex:1;display:grid;grid-template-columns:repeat(5,1fr);gap:4px;">'+
           [
@@ -2549,7 +2757,7 @@ function shareReport() {
                 '<span class="tip-icon" onclick="tipToggle(this)">?</span>'+
                 '<div class="tip-box">'+
                   '<strong style="color:#e8eaf0;">Pitching Execution Grade</strong><br>'+
-                  'Grades a pitcher\'s execution based on strike throwing (30%), first pitch aggression (30%), even count wins (20%), whiff rate (10%), and chase rate (10%).'+
+                  'Grades a pitcher\'s execution based on strike throwing (30%), first pitch aggression (30%), even count wins (15%), whiff rate (15%), and chase rate (10%).'+
                   '<br><br><span style="color:#8891a4;font-size:10px;">Elite: 65+ &nbsp;·&nbsp; Advanced: 55–64 &nbsp;·&nbsp; Developing: 45–54 &nbsp;·&nbsp; Focus Area: &lt;45</span>'+
                 '</div>'+
               '</span>'+
@@ -2573,9 +2781,14 @@ function shareReport() {
       var stk2=pp.filter(function(x){return['StrikeCalled','StrikeSwinging','Foul','InPlay'].includes(x.pitchCall);});
       var ev2P=pp.filter(function(x){return x.balls===x.strikes&&x.balls>0;});
       var ev2W=ev2P.filter(function(x){return['StrikeCalled','StrikeSwinging','Foul','FoulTip','InPlay'].includes(x.pitchCall);});
-      var pegS=(pp.length?stk2.length/pp.length*100*0.30:0)+(fps2.length?fpS2.length/fps2.length*100*0.30:0)+
-               (ev2P.length?ev2W.length/ev2P.length*100*0.20:0)+(sw2.length?wh2.length/sw2.length*100*0.10:0)+
-               (out2.length?ch2.length/out2.length*100*0.10:0);
+      var strikePct=pp.length?stk2.length/pp.length*100:0;
+      var fpsPct=fps2.length?fpS2.length/fps2.length*100:0;
+      var evensPct=ev2P.length?ev2W.length/ev2P.length*100:0;
+      var whiffPct=sw2.length?wh2.length/sw2.length*100:0;
+      var chasePct=out2.length?ch2.length/out2.length*100:0;
+      var whiffScaled=Math.min(100,Math.max(0,(whiffPct-15)/(40-15)*100));
+      var chaseScaled=Math.min(100,Math.max(0,(chasePct-15)/(40-15)*100));
+      var pegS=(strikePct*0.30)+(fpsPct*0.30)+(evensPct*0.15)+(whiffScaled*0.15)+(chaseScaled*0.10);
       var pegL=pegS>=65?'Elite':pegS>=55?'Advanced':pegS>=45?'Developing':'Focus Area';
       var pegC=pegS>=65?'#22c55e':pegS>=55?'#0ea5e9':pegS>=45?'#eab308':'#ef4444';
       var pegBg=pegS>=65?'rgba(34,197,94,0.1)':pegS>=55?'rgba(14,165,233,0.1)':pegS>=45?'rgba(234,179,8,0.1)':'rgba(239,68,68,0.1)';
@@ -2628,7 +2841,7 @@ function shareReport() {
                 '<span class="tip-icon" onclick="tipToggle(this)">?</span>'+
                 '<div class="tip-box">'+
                   '<strong style="color:#e8eaf0;">Pitching Execution Grade</strong><br>'+
-                  'Grades a pitcher\'s execution based on strike throwing (30%), first pitch aggression (30%), even count wins (20%), whiff rate (10%), and chase rate (10%).'+
+                  'Grades a pitcher\'s execution based on strike throwing (30%), first pitch aggression (30%), even count wins (15%), whiff rate (15%), and chase rate (10%).'+
                   '<br><br><span style="color:#8891a4;font-size:10px;">Elite: 65+ &nbsp;·&nbsp; Advanced: 55–64 &nbsp;·&nbsp; Developing: 45–54 &nbsp;·&nbsp; Focus Area: &lt;45</span>'+
                 '</div>'+
               '</span>'+
@@ -2648,111 +2861,6 @@ function shareReport() {
       '</div>';
     }).join('');
 
-    // â”€â”€ Hitter highlights rows (matches app layout) â”€â”€
-    var batterMap={};
-    activeHitPitches.forEach(function(x){if(!x.batter)return;if(!batterMap[x.batter])batterMap[x.batter]=[];batterMap[x.batter].push(x);});
-    var hitterHighlightsHTML=Object.keys(batterMap).map(function(b){
-      var bp=batterMap[b];
-      var bh=activeHits.filter(function(h){return h.batter===b;});
-      var bHits=bp.filter(function(x){return['Single','Double','Triple','HomeRun'].includes(x.playResult);}).length;
-      var bXBH=bp.filter(function(x){return['Double','Triple','HomeRun'].includes(x.playResult);}).length;
-      var bEVs=bh.map(function(h){return h.ev;}).filter(function(v){return v!=null;});
-      var bHH=bEVs.filter(function(v){return v>=90;}).length;
-      var bZone=bp.filter(function(x){return inZone(x);});
-      var bZSw=bZone.filter(function(x){return['StrikeSwinging','Foul','InPlay'].includes(x.pitchCall);}).length;
-      var bOut=bp.filter(function(x){return!inZone(x);});
-      var bCh=bOut.filter(function(x){return['StrikeSwinging','Foul','InPlay'].includes(x.pitchCall);}).length;
-      var bSw=bp.filter(function(x){return['StrikeSwinging','Foul','InPlay'].includes(x.pitchCall);}).length;
-      var bWh=bp.filter(function(x){return x.pitchCall==='StrikeSwinging';}).length;
-      var bTk=bOut.filter(function(x){return x.pitchCall==='BallCalled';}).length;
-      var pdgScore=bZone.length?(
-        (bOut.length?(bTk/bOut.length*100):0)*0.30 +
-        ((1-(bOut.length?bCh/bOut.length:0))*100)*0.30 +
-        ((1-(bSw>0?bWh/bSw:0))*100)*0.25 +
-        (bZSw/bZone.length*100)*0.15
-      ):null;
-      var pdgL=pdgScore==null?'&#8212;':pdgScore>=75?'Elite':pdgScore>=65?'Advanced':pdgScore>=55?'Developing':'Focus Area';
-      var pdgC=pdgScore==null?'#8891a4':pdgScore>=75?'#22c55e':pdgScore>=65?'#0ea5e9':pdgScore>=55?'#eab308':'#ef4444';
-      var pdgBg=pdgScore==null?'transparent':pdgScore>=75?'rgba(34,197,94,0.1)':pdgScore>=65?'rgba(14,165,233,0.1)':pdgScore>=55?'rgba(234,179,8,0.1)':'rgba(239,68,68,0.1)';
-      var bChPct=bOut.length?(bCh/bOut.length*100):null;
-      var bWhPct=bSw>0?(bWh/bSw*100):null;
-      var bGEPct=bOut.length?(bTk/bOut.length*100):null;
-      return '<div style="display:flex;align-items:center;gap:0;background:#111827;border:1px solid #1e2330;border-radius:8px;padding:12px 16px;margin-bottom:8px;">'+
-        '<div style="min-width:200px;">'+
-          '<div style="font-weight:700;font-size:15px;color:#e8eaf0;">'+fmtN(b)+'</div>'+
-          '<div style="font-size:11px;color:#8891a4;margin-top:2px;">'+bHits+' hits &#183; '+bXBH+' XBH &#183; '+bp.length+' PA</div>'+
-        '</div>'+
-        '<div style="flex:1;display:grid;grid-template-columns:repeat(6,1fr);gap:4px;">'+
-          [
-            {l:'AVG EV',v:bEVs.length?safeAvg(bEVs).toFixed(1)+' mph':'&#8212;',c:'#e8eaf0'},
-            {l:'HARD HIT %',v:bEVs.length?Math.round(bHH/bEVs.length*100)+'%':'&#8212;',c:'#e8eaf0'},
-            {l:'Z-SWING %',v:bZone.length?(bZSw/bZone.length*100).toFixed(1)+'%':'&#8212;',c:'#e8eaf0'},
-            {l:'CHASE %',v:bOut.length?(bCh/bOut.length*100).toFixed(1)+'%':'&#8212;',c:metricColor(bChPct,'chase')},
-            {l:'WHIFF %',v:bSw>0?(bWh/bSw*100).toFixed(1)+'%':'&#8212;',c:metricColor(bWhPct,'whiff')},
-            {l:'GOOD EYE %',v:bOut.length?(bTk/bOut.length*100).toFixed(1)+'%':'&#8212;',c:metricColor(bGEPct,'goodEye')},
-          ].map(function(s){
-            return '<div style="text-align:center;padding:6px;background:#0d1117;border-radius:6px;">'+
-              '<div style="font-size:9px;font-weight:700;letter-spacing:0.05em;text-transform:uppercase;color:#8891a4;margin-bottom:3px;">'+s.l+'</div>'+
-              '<div style="font-size:15px;font-weight:700;color:'+s.c+';">'+s.v+'</div>'+
-            '</div>';
-          }).join('')+
-        '</div>'+
-        '<div style="min-width:160px;text-align:right;margin-left:12px;">'+
-          '<div style="background:'+pdgBg+';border:2px solid '+pdgC+';border-radius:8px;padding:8px 14px;display:inline-block;">'+
-            '<div style="font-size:9px;font-weight:700;letter-spacing:0.05em;text-transform:uppercase;color:#8891a4;margin-bottom:2px;">PDG</div>'+
-            '<div style="font-size:16px;font-weight:900;color:'+pdgC+';">'+pdgL+'</div>'+
-            (pdgScore!=null?'<div style="font-size:11px;color:'+pdgC+';opacity:0.8;">('+pdgScore.toFixed(1)+')</div>':'')+
-            '<div style="margin-top:4px;display:flex;align-items:center;justify-content:center;">'+
-              '<span class="tip-wrap">'+
-                '<span class="tip-icon" onclick="tipToggle(this)">?</span>'+
-                '<div class="tip-box">'+
-                  '<strong style="color:#e8eaf0;">Plate Discipline Grade</strong><br>'+
-                  'Grades a hitter\'s plate discipline based on pitch recognition (30%), chase avoidance (30%), contact ability (25%), and zone swing rate (15%).'+
-                  '<br><br><span style="color:#8891a4;font-size:10px;">Elite: 75+ &nbsp;·&nbsp; Advanced: 65–74 &nbsp;·&nbsp; Developing: 55–64 &nbsp;·&nbsp; Focus Area: &lt;55</span>'+
-                '</div>'+
-              '</span>'+
-            '</div>'+
-          '</div>'+
-        '</div>'+
-      '</div>';
-    }).join('');
-
-    // â”€â”€ Hitter comparison cards (matches app layout) â”€â”€
-    var hitterComparisonHTML='<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(380px,1fr));gap:12px;margin-bottom:16px;">'+
-      Object.keys(batterMap).map(function(b){
-        var bp=batterMap[b];
-        var bh=activeHits.filter(function(h){return h.batter===b;});
-        var bEVs=bh.map(function(h){return h.ev;}).filter(function(v){return v!=null;});
-        var bZone=bp.filter(function(x){return inZone(x);});
-        var bZSw=bZone.filter(function(x){return['StrikeSwinging','Foul','InPlay'].includes(x.pitchCall);}).length;
-        var bOut=bp.filter(function(x){return!inZone(x);});
-        var bCh=bOut.filter(function(x){return['StrikeSwinging','Foul','InPlay'].includes(x.pitchCall);}).length;
-        var bBIPs=bh.length;
-        return '<div style="background:#111827;border:1px solid #1e2330;border-radius:8px;padding:16px;">'+
-          '<div style="display:flex;align-items:center;gap:10px;margin-bottom:12px;">'+
-            '<div style="width:44px;height:44px;border-radius:50%;background:rgba(34,197,94,0.12);border:2px solid #22c55e;display:flex;align-items:center;justify-content:center;font-weight:900;font-size:15px;color:#22c55e;flex-shrink:0;">'+initials(b)+'</div>'+
-            '<div>'+
-              '<div style="font-weight:700;font-size:15px;color:#e8eaf0;">'+fmtN(b)+'</div>'+
-              '<div style="font-size:11px;color:#8891a4;margin-top:1px;">'+bp.length+' pitches seen &#183; '+bBIPs+' batted balls</div>'+
-            '</div>'+
-          '</div>'+
-          '<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;">'+
-            [
-              {l:'PA',v:String(bp.length),c:'#e8eaf0'},
-              {l:'AVG EV',v:bEVs.length?safeAvg(bEVs).toFixed(1)+' mph':'&#8212;',c:'#e8eaf0'},
-              {l:'Z-SWING %',v:bZone.length?(bZSw/bZone.length*100).toFixed(1)+'%':'&#8212;',c:'#0ea5e9'},
-              {l:'CHASE %',v:bOut.length?(bCh/bOut.length*100).toFixed(1)+'%':'&#8212;',c:'#ef4444'},
-            ].map(function(s){
-              return '<div style="background:#0d1117;border-radius:6px;padding:10px;text-align:center;">'+
-                '<div style="font-size:9px;font-weight:700;letter-spacing:0.05em;text-transform:uppercase;color:#8891a4;margin-bottom:4px;">'+s.l+'</div>'+
-                '<div style="font-size:20px;font-weight:900;color:'+s.c+';">'+s.v+'</div>'+
-              '</div>';
-            }).join('')+
-          '</div>'+
-        '</div>';
-      }).join('')+
-    '</div>';
-
     // â”€â”€ Decision Making â”€â”€
     var dmP=activeHitPitches;
     var dmZone=dmP.filter(function(x){return inZone(x);});
@@ -2766,8 +2874,8 @@ function shareReport() {
     var dmWh=dmP.filter(function(x){return x.pitchCall==='StrikeSwinging';}).length;
     var dmGoodDec=dmZSw+dmTaken;
     var dmGrade=dmP.length>0?(dmGoodDec/dmP.length*100):0;
-    var dmGradeL=dmGrade>=70?'Elite':dmGrade>=60?'Advanced':dmGrade>=50?'Developing':dmGrade>=40?'Focus Area':'D';
-    var dmGradeC=dmGrade>=70?'#22c55e':dmGrade>=60?'#0ea5e9':dmGrade>=50?'#eab308':'#ef4444';
+    var dmGradeL=dmGrade>=86?'Elite':dmGrade>=65?'Advanced':dmGrade>=50?'Developing':'Focus Area';
+    var dmGradeC=dmGrade>=86?'#22c55e':dmGrade>=65?'#00c8ff':dmGrade>=50?'#eab308':dmGrade>=35?'#f97316':'#ef4444';
     var dmTypes=getTypes(dmP);
     var dmTypeRows=function(){
       var rows=[{label:'All Pitches',pp:dmP,bold:true},{label:'In Zone',pp:dmZone,indent:true},{label:'Outside Zone',pp:dmOut,indent:true}]
@@ -2801,9 +2909,9 @@ function shareReport() {
       var bOut=bp.filter(function(x){return!inZone(x);});
       var ballsTaken=bOut.filter(function(x){return!['StrikeSwinging','Foul','FoulTip','InPlay'].includes(x.pitchCall);}).length;
       var dmgScore=bp.length>0?(zoneSwings+ballsTaken)/bp.length*100:0;
-      var dmgL=dmgScore>=85?'Elite':dmgScore>=75?'Advanced':dmgScore>=65?'Developing':'Focus Area';
-      var dmgC=dmgScore>=85?'#22c55e':dmgScore>=75?'#00c8ff':dmgScore>=65?'#eab308':dmgScore>=55?'#f97316':'#ef4444';
-      var dmgBg=dmgScore>=85?'rgba(34,197,94,0.1)':dmgScore>=75?'rgba(0,200,255,0.1)':dmgScore>=65?'rgba(234,179,8,0.1)':'rgba(239,68,68,0.1)';
+      var dmgL=dmgScore>=86?'Elite':dmgScore>=65?'Advanced':dmgScore>=50?'Developing':'Focus Area';
+      var dmgC=dmgScore>=86?'#22c55e':dmgScore>=65?'#00c8ff':dmgScore>=50?'#eab308':dmgScore>=35?'#f97316':'#ef4444';
+      var dmgBg=dmgScore>=86?'rgba(34,197,94,0.1)':dmgScore>=65?'rgba(0,200,255,0.1)':dmgScore>=50?'rgba(234,179,8,0.1)':'rgba(239,68,68,0.1)';
       var zSwingPct=bZone.length?zoneSwings/bZone.length*100:null;
       var goodEyePct=bOut.length?ballsTaken/bOut.length*100:null;
       return '<div style="display:flex;align-items:center;gap:0;background:#111827;border:1px solid #1e2330;border-radius:8px;padding:12px 16px;margin-bottom:8px;">'+
@@ -2813,7 +2921,7 @@ function shareReport() {
         '</div>'+
         '<div style="flex:1;display:grid;grid-template-columns:repeat(2,1fr);gap:4px;">'+
           [
-            {l:'Zone Swing %',v:zSwingPct!=null?zSwingPct.toFixed(1)+'%':'&#8212;',c:'#e8eaf0'},
+            {l:'Zone Swing %',v:zSwingPct!=null?zSwingPct.toFixed(1)+'%':'&#8212;',c:metricColor(zSwingPct,'zSwing')},
             {l:'Good Eye %',v:goodEyePct!=null?goodEyePct.toFixed(1)+'%':'&#8212;',c:metricColor(goodEyePct,'goodEye')},
           ].map(function(s){
             return '<div style="text-align:center;padding:6px;background:#0d1117;border-radius:6px;">'+
@@ -2886,8 +2994,6 @@ function shareReport() {
     var hWhiffPctVal=hSwings>0?(hWhiffs/hSwings*100):null;
     var goodEyePctVal=hOutside.length?(hTaken/hOutside.length*100):null;
     var chasePctVal=outsidePP.length?(chasesPP.length/outsidePP.length*100):null;
-    var mobileHTML=buildMobileHTML(p);
-    var mobileB64=btoa(unescape(encodeURIComponent(mobileHTML)));
     return '<!DOCTYPE html><html lang="en"><head>'+
       '<meta charset="UTF-8">'+
       '<meta http-equiv="Content-Type" content="text/html; charset=utf-8">'+
@@ -2964,7 +3070,7 @@ function shareReport() {
                 '<span class="tip-icon" onclick="tipToggle(this)">?</span>'+
                 '<div class="tip-box">'+
                   '<strong style="color:#e8eaf0;">Pitching Execution Grade</strong><br>'+
-                  'Grades a pitcher\'s execution based on strike throwing (30%), first pitch aggression (30%), even count wins (20%), whiff rate (10%), and chase rate (10%).'+
+                  'Grades a pitcher\'s execution based on strike throwing (30%), first pitch aggression (30%), even count wins (15%), whiff rate (15%), and chase rate (10%).'+
                   '<br><br><span style="color:#8891a4;font-size:10px;">Elite: 65+ &nbsp;·&nbsp; Advanced: 55–64 &nbsp;·&nbsp; Developing: 45–54 &nbsp;·&nbsp; Focus Area: &lt;45</span>'+
                 '</div>'+
               '</span>'+
@@ -2983,7 +3089,7 @@ function shareReport() {
         '</div>'+
         sh('','HITTING SUMMARY','#22c55e')+
         '<div class="sc-grid">'+
-          sc('Team BA',hBA,'',hBA_hits+' hits / '+hPAs+' PAs (excl. walks)','#e8eaf0','Team batting average — hits divided by plate appearances excluding walks. The foundational measure of how often the team gets on base via a hit.<br><br><span style="font-size:10px;color:#8891a4">Green: ≥.280 &nbsp;·&nbsp; Yellow: .200–.279 &nbsp;·&nbsp; Red: &lt;.200</span>')+
+          scm('Team BA',hBA,'',hBA_hits+' hits / '+hPAs+' PAs (excl. walks)','#1e2330',metricColor(hPAs>0?hBA_hits/hPAs:null,'teamBA'),'Team batting average — hits divided by plate appearances excluding walks. The foundational measure of how often the team gets on base via a hit.<br><br><span style="font-size:10px;color:#8891a4">Green: ≥.280 &nbsp;·&nbsp; Yellow: .200–.279 &nbsp;·&nbsp; Red: &lt;.200</span>')+
           sc('Avg Exit Velo',hAvgEV,'mph',hEVs.length+' batted balls (no fouls)','#22c55e')+
           sc('Max Exit Velo',hMaxEV,'mph','Fouls excluded','#e8eaf0')+
           sc('Hard Hit %',pct(hHardHits,hEVs.length),'',hHardHits+' balls â‰¥90 mph','#f59e0b','Percentage of batted balls hit at 90 mph or harder. Higher is better — hard contact leads to more hits and extra bases. This measures the quality of contact the team is making.<br><br><span style="font-size:10px;color:#8891a4">Green: ≥45% &nbsp;·&nbsp; Yellow: 30–44% &nbsp;·&nbsp; Red: &lt;30%</span>')+
@@ -3075,7 +3181,7 @@ function shareReport() {
       // â”€â”€ HITTING â”€â”€
       '<div class="panel" id="p-hitting">'+
         '<div class="sc-grid" style="grid-template-columns:repeat(4,1fr);margin-bottom:16px;">'+
-          sc('Z-Swing %',(hZone.length?(hZSw/hZone.length*100).toFixed(1):'&#8212;'),'%',hZSw+' swings on '+hZone.length+' zone pitches','#0ea5e9',"How often the hitter swings at pitches inside the strike zone. Higher is generally better — it shows aggression in the zone. Very low z-swing can mean the hitter is being too passive.<br><br><span style='font-size:10px;color:#8891a4'>No fixed grade — context dependent</span>")+
+          scm('Z-Swing %',(hZone.length?(hZSw/hZone.length*100).toFixed(1):'&#8212;'),'%',hZSw+' swings on '+hZone.length+' zone pitches','#1e2330',metricColor(hZone.length?hZSw/hZone.length*100:null,'zSwing'),"How often the hitter swings at pitches inside the strike zone. Elite hitters are in the zone 65–87.5% of the time — aggressive but selective. Above 87.5% may indicate hacking at everything in the zone. Below 50% suggests the hitter is too passive on hittable pitches.<br><br><span style='font-size:10px;color:#8891a4'>Green: 65–87.5% · Yellow: 50–64.9% or >87.5% · Red: below 50%</span>")+
           scm('Whiff %',(hSwings>0?(hWhiffs/hSwings*100).toFixed(1):'&#8212;'),'%',hWhiffs+' misses on '+hSwings+' swings','#1e2330',metricColor(hSwings>0?hWhiffs/hSwings*100:null,'whiff'),"Percentage of swings that result in a complete miss. Lower is better for hitters — it shows the ability to make contact when committing to a swing.<br><br><span style='font-size:10px;color:#8891a4'>Green: &lt;22% &nbsp;·&nbsp; Yellow: 22–33% &nbsp;·&nbsp; Red: &gt;33%</span>")+
           scm('Damage Count',dcAvg,'',dcH+'-for-'+dcPAs+' (balls in damage counts excluded)','#1e2330',metricColor(dcPAs>0?dcH/dcPAs:null,'damageCount'),"Batting average in hitter-friendly counts (1-0, 2-0, 3-1). Measures how well the team capitalizes when the pitcher is behind. Good hitters do damage in these counts.<br><br><span style='font-size:10px;color:#8891a4'>Green: ≥.275 &nbsp;·&nbsp; Yellow: .175–.274 &nbsp;·&nbsp; Red: &lt;.175</span>")+
           sc('Avg Exit Velo',hAvgEV,'mph','from '+hEVs.length+' batted balls','#f59e0b')+
@@ -3090,11 +3196,11 @@ function shareReport() {
       // â”€â”€ DECISION MAKING â”€â”€
       '<div class="panel" id="p-decision">'+
         '<div class="sc-grid" style="grid-template-columns:repeat(4,1fr);margin-bottom:16px;">'+
-          sc('Chase Rate',pct(dmChase,dmOut.length),'',dmChase+' swings on '+dmOut.length+' outside pitches','#0ea5e9',"How often the hitter swings at pitches outside the strike zone. Lower is better — chasing bad pitches is one of the most exploitable weaknesses a pitcher will target.<br><br><span style='font-size:10px;color:#8891a4'>Green: &lt;28% &nbsp;·&nbsp; Yellow: 28–38% &nbsp;·&nbsp; Red: &gt;38%</span>")+
+          scm('Chase Rate',pct(dmChase,dmOut.length),'',dmChase+' swings on '+dmOut.length+' outside pitches','#1e2330',metricColor(dmOut.length?dmChase/dmOut.length*100:null,'chase'),"How often the hitter swings at pitches outside the strike zone. Lower is better — chasing bad pitches is one of the most exploitable weaknesses a pitcher will target.<br><br><span style='font-size:10px;color:#8891a4'>Green: &lt;28% &nbsp;·&nbsp; Yellow: 28–38% &nbsp;·&nbsp; Red: &gt;38%</span>")+
           sc('Zone Whiff %',pct(dmZWh,dmZSw),'',dmZWh+' whiffs on '+dmZSw+' zone swings','#ef4444',"How often the hitter misses on pitches inside the strike zone. Even in the zone, missing pitches is a concern. Lower is better.<br><br><span style='font-size:10px;color:#8891a4'>No fixed grade — used alongside Chase Whiff % for full picture</span>")+
           sc('Good Eye %',pct(dmTaken,dmOut.length),'',dmTaken+' balls taken on '+dmOut.length+' outside pitches','#22c55e',"How often the hitter correctly takes a pitch outside the strike zone as a ball. Higher is better — it shows strong pitch recognition and discipline.<br><br><span style='font-size:10px;color:#8891a4'>Green: ≥60% &nbsp;·&nbsp; Yellow: 42–59% &nbsp;·&nbsp; Red: &lt;42%</span>")+
           '<div class="sc" style="border-top:3px solid '+dmGradeC+'">'+
-            '<div class="sc-l">Decision Making Grade<span class="tip-wrap" style="margin-left:4px;vertical-align:middle;"><span class="tip-icon" onclick="tipToggle(this)">?</span><div class="tip-box">A composite grade that measures how well the hitter recognizes pitches and makes quality swing decisions. Combines good eye rate, chase avoidance, contact rate, and zone swing rate.<br><br><span style="font-size:10px;color:#8891a4">Elite: 70+ &nbsp;·&nbsp; Advanced: 60–69 &nbsp;·&nbsp; Developing: 50–59 &nbsp;·&nbsp; Focus Area: &lt;50</span></div></span></div>'+
+            '<div class="sc-l">Decision Making Grade<span class="tip-wrap" style="margin-left:4px;vertical-align:middle;"><span class="tip-icon" onclick="tipToggle(this)">?</span><div class="tip-box">A composite grade that measures how well the hitter recognizes pitches and makes quality swing decisions. Combines good eye rate, chase avoidance, contact rate, and zone swing rate.<br><br><span style="font-size:10px;color:#8891a4">Elite: 86+ &nbsp;·&nbsp; Advanced: 65–85 &nbsp;·&nbsp; Developing: 50–64 &nbsp;·&nbsp; Focus Area: below 50</span></div></span></div>'+
             '<div style="font-size:22px;font-weight:900;color:'+dmGradeC+';">'+dmGrade.toFixed(1)+' <span style="font-size:18px">'+dmGradeL+'</span></div>'+
             '<div class="sc-s">'+dmGoodDec+' good decisions on '+dmP.length+' pitches</div>'+
           '</div>'+
@@ -3170,6 +3276,8 @@ function shareReport() {
       if (metric === 'damageCount')    return v>=0.275?'#22c55e':v>=0.175?'#eab308':'#ef4444';
       if (metric === 'goodEye')        return v>=60?'#22c55e':v>=42?'#eab308':'#ef4444';
       if (metric === 'chase')          return v<28?'#22c55e':v<=38?'#eab308':'#ef4444';
+      if (metric === 'zSwing')         return v>87.5?'#eab308':v>=65?'#22c55e':v>=50?'#eab308':'#ef4444';
+      if (metric === 'teamBA')         return v>=0.280?'#22c55e':v>=0.200?'#eab308':'#ef4444';
       return '#e8eaf0';
     }
     function safeAvg(a) { return a.length?a.reduce(function(s,v){return s+v;},0)/a.length:null; }
@@ -3187,25 +3295,23 @@ function shareReport() {
       var tid=effectiveTid;
       // Use topBottom to determine pitching/batting perspective — same as main app
       activePitches=pitches.filter(function(x){
-        return (x.homeTeamId===tid && x.topBottom==='Bottom') ||
-               (x.awayTeamId===tid && x.topBottom==='Top');
-      });
-      activeHitPitches=pitches.filter(function(x){
         return (x.homeTeamId===tid && x.topBottom==='Top') ||
                (x.awayTeamId===tid && x.topBottom==='Bottom');
       });
-      // For hits, use batterTeam since hits don't have topBottom
+      activeHitPitches=pitches.filter(function(x){
+        return (x.homeTeamId===tid && x.topBottom==='Bottom') ||
+               (x.awayTeamId===tid && x.topBottom==='Top');
+      });
       activeHits=hits.filter(function(x){
-        // batterTeam can be 'HOME'/'AWAY' (normalized) or the raw team name
-        var isHomeBatter = x.batterTeam==='HOME' || x.batterTeam===x.homeTeamId || x.batterTeam===tid;
-        var isAwayBatter = x.batterTeam==='AWAY' || (x.batterTeam && x.batterTeam!=='HOME' && x.homeTeamId && x.batterTeam!==x.homeTeamId);
-        return (x.homeTeamId===tid && isHomeBatter) ||
-               (x.awayTeamId===tid && isAwayBatter);
+        return (x.homeTeamId===tid && x.topBottom==='Bottom') ||
+               (x.awayTeamId===tid && x.topBottom==='Top');
       });
     } else if(!p.isTournamentMode && p.currentTeam && p.currentTeam!=='ALL') {
       activePitches=pitches.filter(function(x){return x.pitcherTeam===p.currentTeam;});
       activeHitPitches=pitches.filter(function(x){return x.batterTeam===p.currentTeam;});
-      activeHits=hits.filter(function(x){return x.batterTeam===p.currentTeam;});
+      var sgTeamBatters={};
+      activeHitPitches.forEach(function(x){if(x.batter)sgTeamBatters[x.batter]=true;});
+      activeHits=hits.filter(function(x){return x.batter&&sgTeamBatters[x.batter];});
     }
 
     // Build valid batter set from filtered pitches
@@ -3218,16 +3324,21 @@ function shareReport() {
     }
 
     // ── stat card helper ──
-    function sc(label,val,unit,sub,color) {
+    function mobTip(tip) {
+      return '<span class="mob-tip-wrap"><span class="mob-tip-icon" onclick="mobTipToggle(this)">?</span><div class="mob-tip-box">'+tip+'</div></span>';
+    }
+    function sc(label,val,unit,sub,color,tip) {
+      var tipHTML=tip?mobTip(tip):'';
       return '<div class="sc" style="border-top:3px solid '+color+'">'+
-        '<div class="sc-l">'+label+'</div>'+
+        '<div class="sc-l">'+label+tipHTML+'</div>'+
         '<div class="sc-v" style="color:'+color+'">'+val+(unit?'<span class="sc-u"> '+unit+'</span>':'')+'</div>'+
         (sub?'<div class="sc-s">'+sub+'</div>':'')+
         '</div>';
     }
-    function scm(label,val,unit,sub,borderColor,valueColor) {
+    function scm(label,val,unit,sub,borderColor,valueColor,tip) {
+      var tipHTML=tip?mobTip(tip):'';
       return '<div class="sc" style="border-top:3px solid '+borderColor+'">'+
-        '<div class="sc-l">'+label+'</div>'+
+        '<div class="sc-l">'+label+tipHTML+'</div>'+
         '<div class="sc-v" style="color:'+(valueColor||borderColor)+'">'+val+(unit?'<span class="sc-u"> '+unit+'</span>':'')+'</div>'+
         (sub?'<div class="sc-s">'+sub+'</div>':'')+
         '</div>';
@@ -3235,13 +3346,30 @@ function shareReport() {
 
     // ── section header ──
     function sh(icon,label,color) {
-      return '<div class="sh" style="border-left:3px solid '+color+'">'+icon+' '+label+'</div>';
+      return '<div class="sh" style="border-left:3px solid '+color+'">'+(icon?icon+' ':'')+label+'</div>';
     }
 
     // ══ COACH ANALYSIS ══
     var strikes   = activePitches.filter(function(x){return['StrikeCalled','StrikeSwinging','Foul','FoulTip','InPlay'].includes(x.pitchCall);}).length;
-    var fps       = activePitches.filter(function(x){return x.balls===0&&x.strikes===0;});
-    var fpStrikes = fps.filter(function(x){return['StrikeCalled','StrikeSwinging','Foul','FoulTip','InPlay'].includes(x.pitchCall);});
+    var fpPaGroups={};
+    activePitches.forEach(function(x){
+      if(!x.batter||!x.inning)return;
+      var pk=x.inning+'-'+(x.topBottom||'')+'-'+x.batter+'-'+(x.homeTeamId||'')+'-'+(x.awayTeamId||'');
+      if(!fpPaGroups[pk])fpPaGroups[pk]=[];
+      fpPaGroups[pk].push(x);
+    });
+    var fps=[];
+    Object.keys(fpPaGroups).forEach(function(pk){
+      var group=fpPaGroups[pk];
+      for(var i=0;i<group.length;i++){
+        var p=group[i];
+        if(p.balls===0&&p.strikes===0&&['StrikeCalled','StrikeSwinging','Foul','FoulTip','BallCalled','InPlay','HitByPitch'].indexOf(p.pitchCall)>=0){
+          fps.push(p);
+          break;
+        }
+      }
+    });
+    var fpStrikes=fps.filter(function(x){return['StrikeCalled','StrikeSwinging','Foul','FoulTip','InPlay'].includes(x.pitchCall);});
     var evenPP    = activePitches.filter(function(x){return x.balls===x.strikes&&x.balls>0;});
     var evenWins  = evenPP.filter(function(x){return['StrikeCalled','StrikeSwinging','Foul','FoulTip','InPlay'].includes(x.pitchCall);});
     var swingsPP  = activePitches.filter(function(x){return['StrikeSwinging','Foul','FoulTip','InPlay'].includes(x.pitchCall);});
@@ -3278,12 +3406,20 @@ function shareReport() {
       var stk2=pp.filter(function(x){return['StrikeCalled','StrikeSwinging','Foul','InPlay'].includes(x.pitchCall);});
       var ev2P=pp.filter(function(x){return x.balls===x.strikes&&x.balls>0;});
       var ev2W=ev2P.filter(function(x){return['StrikeCalled','StrikeSwinging','Foul','FoulTip','InPlay'].includes(x.pitchCall);});
-      var pegS=(pp.length?stk2.length/pp.length*100*0.30:0)+(fps2.length?fpS2.length/fps2.length*100*0.30:0)+
-               (ev2P.length?ev2W.length/ev2P.length*100*0.20:0)+(sw2.length?wh2.length/sw2.length*100*0.10:0)+
-               (out2.length?ch2.length/out2.length*100*0.10:0);
+      var strikePct=pp.length?stk2.length/pp.length*100:0;
+      var fpsPct=fps2.length?fpS2.length/fps2.length*100:0;
+      var evensPct=ev2P.length?ev2W.length/ev2P.length*100:0;
+      var whiffPct=sw2.length?wh2.length/sw2.length*100:0;
+      var chasePct=out2.length?ch2.length/out2.length*100:0;
+      var whiffScaled=Math.min(100,Math.max(0,(whiffPct-15)/(40-15)*100));
+      var chaseScaled=Math.min(100,Math.max(0,(chasePct-15)/(40-15)*100));
+      var pegS=(strikePct*0.30)+(fpsPct*0.30)+(evensPct*0.15)+(whiffScaled*0.15)+(chaseScaled*0.10);
       var pegL=pegS>=65?'Elite':pegS>=55?'Advanced':pegS>=45?'Developing':'Focus Area';
       var pegC=pegS>=65?'#22c55e':pegS>=55?'#0ea5e9':pegS>=45?'#eab308':'#ef4444';
       var fbV=pp.filter(function(x){return x.pitchType==='Fastball'||x.pitchType==='Four-Seam';}).map(function(x){return x.spd;}).filter(Boolean);
+      var fbMin=fbV.length?Math.min.apply(null,fbV).toFixed(1):null;
+      var fbMax=fbV.length?Math.max.apply(null,fbV).toFixed(1):null;
+      var fbRangeStr=fbV.length?('Fastball Velocity: '+fbMin+'–'+fbMax+' mph'+(parseFloat(fbMax)>=90?' 🔥':'')):'';
       var types2={};
       pp.forEach(function(x){if(x.pitchType)types2[x.pitchType]=(types2[x.pitchType]||0)+1;});
       var typeStr=Object.entries(types2).sort(function(a,b){return b[1]-a[1];}).slice(0,3).map(function(e){
@@ -3296,6 +3432,7 @@ function shareReport() {
           '<div class="pc-info">'+
             '<div class="pc-name">'+fmtN(nm)+'</div>'+
             '<div class="pc-sub">'+pp.length+' pitches</div>'+
+            (fbRangeStr?'<div class="pc-sub" style="margin-top:2px;">'+fbRangeStr+'</div>':'')+
             '<div style="margin-top:4px">'+typeStr+'</div>'+
           '</div>'+
           '<div class="peg-tag" style="color:'+pegC+';border-color:'+pegC+'">'+pegL+'<br><span style="font-size:10px;font-weight:400">('+pegS.toFixed(1)+')</span></div>'+
@@ -3311,19 +3448,49 @@ function shareReport() {
       '</div>';
     }).join('');
 
+    var teamPegScores=Object.keys(pitcherMap).filter(function(nm){return nm&&!/undefined/i.test(nm);}).map(function(nm){
+      var pp=pitcherMap[nm];
+      var fps2=pp.filter(function(x){return x.balls===0&&x.strikes===0;});
+      var fpS2=fps2.filter(function(x){return['StrikeCalled','StrikeSwinging','Foul','FoulTip','InPlay'].includes(x.pitchCall);});
+      var sw2=pp.filter(function(x){return['StrikeSwinging','Foul','FoulTip','InPlay'].includes(x.pitchCall);});
+      var wh2=pp.filter(function(x){return x.pitchCall==='StrikeSwinging';});
+      var out2=pp.filter(function(x){return!inZone(x);});
+      var ch2=out2.filter(function(x){return['StrikeSwinging','Foul','FoulTip','InPlay'].includes(x.pitchCall);});
+      var stk2=pp.filter(function(x){return['StrikeCalled','StrikeSwinging','Foul','InPlay'].includes(x.pitchCall);});
+      var ev2P=pp.filter(function(x){return x.balls===x.strikes&&x.balls>0;});
+      var ev2W=ev2P.filter(function(x){return['StrikeCalled','StrikeSwinging','Foul','FoulTip','InPlay'].includes(x.pitchCall);});
+      var strikePct=pp.length?stk2.length/pp.length*100:0;
+      var fpsPct=fps2.length?fpS2.length/fps2.length*100:0;
+      var evensPct=ev2P.length?ev2W.length/ev2P.length*100:0;
+      var whiffPct=sw2.length?wh2.length/sw2.length*100:0;
+      var chasePct=out2.length?ch2.length/out2.length*100:0;
+      var whiffScaled=Math.min(100,Math.max(0,(whiffPct-15)/(40-15)*100));
+      var chaseScaled=Math.min(100,Math.max(0,(chasePct-15)/(40-15)*100));
+      return (strikePct*0.30)+(fpsPct*0.30)+(evensPct*0.15)+(whiffScaled*0.15)+(chaseScaled*0.10);
+    });
+    var pegScore=teamPegScores.length?teamPegScores.reduce(function(s,v){return s+v;},0)/teamPegScores.length:null;
+    var pegLabel=pegScore==null?'&#8212;':pegScore>=65?'Elite':pegScore>=55?'Advanced':pegScore>=45?'Developing':'Focus Area';
+    var pegColor=pegScore==null?'#8891a4':pegScore>=65?'#22c55e':pegScore>=55?'#0ea5e9':pegScore>=45?'#eab308':'#ef4444';
+
     // hitting summary
     var hBA_hits=activeHitPitches.filter(function(x){return['Single','Double','Triple','HomeRun'].includes(x.playResult);}).length;
     var hXBH=activeHitPitches.filter(function(x){return['Double','Triple','HomeRun'].includes(x.playResult);}).length;
     var hWalks=activeHitPitches.filter(function(x){return x.playResult==='Walk'||x.korbb==='Walk';}).length;
     var hKs=activeHitPitches.filter(function(x){return['StrikeoutSwinging','StrikeoutLooking'].includes(x.playResult)||x.korbb==='Strikeout';}).length;
     var hPAs=new Set(activeHitPitches.filter(function(x){return x.batter&&x.inning&&x.topBottom;}).map(function(x){return x.inning+'-'+x.topBottom+'-'+x.batter;})).size;
-    var hEVs=activeHits.map(function(h){return h.ev;}).filter(function(v){return v!=null;});
+    var hEVs=activeHits.filter(function(h){return h.ev!=null && h.playResult!=='Foul';}).map(function(h){return h.ev;});
     var hBA=hPAs>0?'.'+String(Math.round(hBA_hits/hPAs*1000)).padStart(3,'0'):'&#8212;';
     var dcP=activeHitPitches.filter(function(x){return(x.balls===1&&x.strikes===0)||(x.balls===2&&x.strikes===0)||(x.balls===3&&x.strikes===1);});
     var dcA=dcP.filter(function(x){return x.pitchCall!=='BallCalled';});
     var dcH=dcA.filter(function(x){return['Single','Double','Triple','HomeRun'].includes(x.playResult);}).length;
     var dcPAs=new Set(dcA.filter(function(x){return x.batter&&x.inning&&x.topBottom;}).map(function(x){return x.inning+'-'+x.topBottom+'-'+x.batter;})).size;
     var dcAvg=dcPAs>0?'.'+String(Math.round(dcH/dcPAs*1000)).padStart(3,'0'):'&#8212;';
+    var hSwings=activeHitPitches.filter(function(x){return['StrikeSwinging','Foul','InPlay'].includes(x.pitchCall);}).length;
+    var hWhiffs=activeHitPitches.filter(function(x){return x.pitchCall==='StrikeSwinging';}).length;
+    var hOutside=activeHitPitches.filter(function(x){return!inZone(x);});
+    var hTaken=hOutside.filter(function(x){return x.pitchCall==='BallCalled';}).length;
+    var hWhiffPctVal=hSwings>0?(hWhiffs/hSwings*100):null;
+    var goodEyePctVal=hOutside.length?(hTaken/hOutside.length*100):null;
 
     // hitter cards
     var batterMap={};
@@ -3337,7 +3504,7 @@ function shareReport() {
       var bh=activeHits.filter(function(h){return h.batter===b;});
       var bHits=bp.filter(function(x){return['Single','Double','Triple','HomeRun'].includes(x.playResult);}).length;
       var bXBH=bp.filter(function(x){return['Double','Triple','HomeRun'].includes(x.playResult);}).length;
-      var bEVs=bh.map(function(h){return h.ev;}).filter(function(v){return v!=null;});
+      var bEVs=bh.filter(function(h){return h.ev!=null && h.playResult!=='Foul';}).map(function(h){return h.ev;});
       var bZone=bp.filter(function(x){return inZone(x);});
       var bZSw=bZone.filter(function(x){return['StrikeSwinging','Foul','InPlay'].includes(x.pitchCall);}).length;
       var bOut=bp.filter(function(x){return!inZone(x);});
@@ -3356,6 +3523,7 @@ function shareReport() {
       var bChPct=bOut.length?bCh/bOut.length*100:null;
       var bWhPct=bSw>0?bWh/bSw*100:null;
       var bGEPct=bOut.length?bTk/bOut.length*100:null;
+      var bZSwPct=bZone.length?bZSw/bZone.length*100:null;
       return '<div class="player-card">'+
         '<div class="pc-top">'+
           '<div class="pc-avatar" style="background:rgba(34,197,94,0.15);border-color:#22c55e;color:#22c55e">'+
@@ -3369,12 +3537,211 @@ function shareReport() {
         '</div>'+
         '<div class="pc-stats">'+
           '<div class="pc-stat"><div class="pc-stat-v">'+(bEVs.length?safeAvg(bEVs).toFixed(1)+' mph':'&#8212;')+'</div><div class="pc-stat-l">Avg EV</div></div>'+
-          '<div class="pc-stat"><div class="pc-stat-v">'+(bZone.length?(bZSw/bZone.length*100).toFixed(1)+'%':'&#8212;')+'</div><div class="pc-stat-l">Z-Swing%</div></div>'+
+          '<div class="pc-stat"><div class="pc-stat-v" style="color:'+metricColor(bZSwPct,'zSwing')+'">'+(bZSwPct!=null?bZSwPct.toFixed(1)+'%':'&#8212;')+'</div><div class="pc-stat-l">Z-Swing%</div></div>'+
           '<div class="pc-stat"><div class="pc-stat-v" style="color:'+metricColor(bChPct,'chase')+'">'+(bChPct!=null?bChPct.toFixed(1)+'%':'&#8212;')+'</div><div class="pc-stat-l">Chase%</div></div>'+
           '<div class="pc-stat"><div class="pc-stat-v" style="color:'+metricColor(bWhPct,'whiff')+'">'+(bWhPct!=null?bWhPct.toFixed(1)+'%':'&#8212;')+'</div><div class="pc-stat-l">Whiff%</div></div>'+
           '<div class="pc-stat"><div class="pc-stat-v" style="color:'+metricColor(bGEPct,'goodEye')+'">'+(bGEPct!=null?bGEPct.toFixed(1)+'%':'&#8212;')+'</div><div class="pc-stat-l">Good Eye%</div></div>'+
         '</div>'+
       '</div>';
+    }).join('');
+
+    var teamPdgScores=Object.keys(batterMap).map(function(b){
+      var bp=batterMap[b];
+      var bZone=bp.filter(function(x){return inZone(x);});
+      var bOut=bp.filter(function(x){return!inZone(x);});
+      var bCh=bOut.filter(function(x){return['StrikeSwinging','Foul','InPlay'].includes(x.pitchCall);}).length;
+      var bSw=bp.filter(function(x){return['StrikeSwinging','Foul','InPlay'].includes(x.pitchCall);}).length;
+      var bWh=bp.filter(function(x){return x.pitchCall==='StrikeSwinging';}).length;
+      var bTk=bOut.filter(function(x){return x.pitchCall==='BallCalled';}).length;
+      var bZSw=bZone.filter(function(x){return['StrikeSwinging','Foul','InPlay'].includes(x.pitchCall);}).length;
+      return bZone.length?(
+        (bOut.length?(bTk/bOut.length*100):0)*0.30+
+        ((1-(bOut.length?bCh/bOut.length:0))*100)*0.30+
+        ((1-(bSw>0?bWh/bSw:0))*100)*0.25+
+        (bZSw/bZone.length*100)*0.15
+      ):null;
+    }).filter(function(v){return v!=null;});
+    var pdgScore=teamPdgScores.length?teamPdgScores.reduce(function(s,v){return s+v;},0)/teamPdgScores.length:null;
+    var pdgLabel=pdgScore==null?'&#8212;':pdgScore>=75?'Elite':pdgScore>=65?'Advanced':pdgScore>=55?'Developing':'Focus Area';
+    var pdgColor=pdgScore==null?'#8891a4':pdgScore>=75?'#22c55e':pdgScore>=65?'#0ea5e9':pdgScore>=55?'#eab308':'#ef4444';
+
+    function initials(n){ return fmtN(n).split(' ').map(function(w){return w[0];}).filter(Boolean).join('').slice(0,2).toUpperCase(); }
+    var hitterComparisonHTML=Object.keys(batterMap).map(function(b){
+      var bp=batterMap[b];
+      var bh=activeHits.filter(function(h){return h.batter===b;});
+      var bEVs=bh.filter(function(h){return h.ev!=null && h.playResult!=='Foul';}).map(function(h){return h.ev;});
+      var bZone=bp.filter(function(x){return inZone(x);});
+      var bZSw=bZone.filter(function(x){return['StrikeSwinging','Foul','InPlay'].includes(x.pitchCall);}).length;
+      var bOut=bp.filter(function(x){return!inZone(x);});
+      var bCh=bOut.filter(function(x){return['StrikeSwinging','Foul','InPlay'].includes(x.pitchCall);}).length;
+      var bBIPs=bh.length;
+      var bPAcount = new Set(
+        bp.filter(function(x){ return x.batter && x.inning; })
+          .map(function(x){ return x.inning + '-' + (x.topBottom||'') + '-' + x.batter; })
+      ).size;
+      return '<div class="player-card">'+
+        '<div class="pc-top">'+
+          '<div class="pc-avatar" style="background:rgba(34,197,94,0.15);border-color:#22c55e;color:#22c55e">'+initials(b)+'</div>'+
+          '<div class="pc-info">'+
+            '<div class="pc-name">'+fmtN(b)+'</div>'+
+            '<div class="pc-sub">'+bPAcount+' PA &#183; '+bp.length+' pitches &#183; '+bBIPs+' batted balls</div>'+
+          '</div>'+
+        '</div>'+
+        '<div class="pc-stats" style="grid-template-columns:repeat(4,1fr)">'+
+          '<div class="pc-stat"><div class="pc-stat-v">'+bPAcount+'</div><div class="pc-stat-l">PA</div></div>'+
+          '<div class="pc-stat"><div class="pc-stat-v">'+(bEVs.length?safeAvg(bEVs).toFixed(1):'&#8212;')+'</div><div class="pc-stat-l">Avg EV</div></div>'+
+          '<div class="pc-stat"><div class="pc-stat-v" style="color:'+metricColor(bZone.length?bZSw/bZone.length*100:null,'zSwing')+'">'+(bZone.length?(bZSw/bZone.length*100).toFixed(1)+'%':'&#8212;')+'</div><div class="pc-stat-l">Z-Swing%</div></div>'+
+          '<div class="pc-stat"><div class="pc-stat-v" style="color:'+metricColor(bOut.length?bCh/bOut.length*100:null,'chase')+'">'+(bOut.length?(bCh/bOut.length*100).toFixed(1)+'%':'&#8212;')+'</div><div class="pc-stat-l">Chase%</div></div>'+
+        '</div>'+
+      '</div>';
+    }).join('');
+
+    var COG=[{b:0,s:0},{b:0,s:1},{b:0,s:2},{b:1,s:0},{b:1,s:1},{b:1,s:2},{b:2,s:0},{b:2,s:1},{b:2,s:2},{b:3,s:0},{b:3,s:1},{b:3,s:2}];
+    var COG_KEYS=COG.map(function(c){return c.b+'-'+c.s;});
+    function cntColor(key) {
+      if(['0-1','0-2','1-2'].indexOf(key)>=0) return{bg:'rgba(34,197,94,0.12)',border:'#22c55e',text:'#4ade80',num:'#4ade80'};
+      if(['1-1','2-2','3-2'].indexOf(key)>=0) return{bg:'rgba(234,179,8,0.12)',border:'#eab308',text:'#fbbf24',num:'#fbbf24'};
+      if(['1-0','2-0','3-0','2-1','3-1'].indexOf(key)>=0) return{bg:'rgba(239,68,68,0.12)',border:'#ef4444',text:'#f87171',num:'#f87171'};
+      return{bg:'#111827',border:'#1e2330',text:'#8891a4',num:'#e8eaf0'};
+    }
+    function buildCountData(pitchList,nameField) {
+      var teamSets={},playerSets={};
+      COG.forEach(function(c){teamSets[c.b+'-'+c.s]={};});
+      pitchList.forEach(function(x){
+        var ck=x.balls+'-'+x.strikes;
+        if(!teamSets.hasOwnProperty(ck))return;
+        var pk=x.inning+'-'+(x.topBottom||'')+'-'+(x.batter||'');
+        if(!pk||!x.batter)return;
+        teamSets[ck][pk]=true;
+        var nm=x[nameField];
+        if(!nm||/undefined/i.test(nm))return;
+        if(nameField==='batter' && Object.keys(validBatters).length>0 && !validBatters[nm]) return;
+        if(!playerSets[nm]){playerSets[nm]={fps:{}};COG.forEach(function(c){playerSets[nm][c.b+'-'+c.s]={};});}
+        playerSets[nm][ck][pk]=true;
+        if(ck==='0-0'&&['StrikeSwinging','Foul','FoulTip','InPlay'].includes(x.pitchCall)){
+          playerSets[nm].fps[pk]=true;
+        }
+      });
+      // Override 0-1: recalculate as first pitch strikes (PA-deduplicated)
+      var fpValidCalls=['StrikeCalled','StrikeSwinging','Foul','FoulTip','BallCalled','InPlay','HitByPitch'];
+      var fpStrikeCalls2=['StrikeCalled','StrikeSwinging','Foul','FoulTip','InPlay'];
+      teamSets['0-1']={};
+      Object.keys(playerSets).forEach(function(nm){if(playerSets[nm])playerSets[nm]['0-1']={};});
+      var fpGroups2={};
+      pitchList.forEach(function(x){
+        if(!x.batter||!x.inning)return;
+        var pk2=x.inning+'-'+(x.topBottom||'')+'-'+x.batter;
+        if(!fpGroups2[pk2])fpGroups2[pk2]=[];
+        fpGroups2[pk2].push(x);
+      });
+      Object.keys(fpGroups2).forEach(function(pk2){
+        var fp=null;
+        for(var fi=0;fi<fpGroups2[pk2].length;fi++){
+          var p=fpGroups2[pk2][fi];
+          if(p.balls===0&&p.strikes===0&&fpValidCalls.indexOf(p.pitchCall)>=0){fp=p;break;}
+        }
+        if(!fp||fpStrikeCalls2.indexOf(fp.pitchCall)<0)return;
+        teamSets['0-1'][pk2]=true;
+        var nm2=fp[nameField];
+        if(nm2&&!/undefined/i.test(nm2)){
+          if(nameField==='batter'&&Object.keys(validBatters).length>0&&!validBatters[nm2])return;
+          if(!playerSets[nm2]){playerSets[nm2]={fps:{}};COG.forEach(function(c){playerSets[nm2][c.b+'-'+c.s]={};});}
+          playerSets[nm2]['0-1'][pk2]=true;
+        }
+      });
+      var teamFPS={};
+      pitchList.filter(function(x){return x.balls===0&&x.strikes===0&&['StrikeSwinging','Foul','FoulTip','InPlay'].includes(x.pitchCall);})
+        .forEach(function(x){var pk=x.inning+'-'+(x.topBottom||'')+'-'+(x[nameField]||'');if(pk)teamFPS[pk]=true;});
+      var teamCounts={};
+      COG.forEach(function(c){teamCounts[c.b+'-'+c.s]=Object.keys(teamSets[c.b+'-'+c.s]).length;});
+      teamCounts['fps']=Object.keys(teamFPS).length;
+      var playerCounts={};
+      Object.keys(playerSets).forEach(function(nm){
+        playerCounts[nm]={fps:Object.keys(playerSets[nm].fps||{}).length};
+        COG.forEach(function(c){playerCounts[nm][c.b+'-'+c.s]=Object.keys(playerSets[nm][c.b+'-'+c.s]).length;});
+      });
+      return{team:teamCounts,players:playerCounts};
+    }
+    function renderCountGrid(csd,isHitter) {
+      var teamCards=COG.map(function(c){
+        var key=c.b+'-'+c.s;
+        var n=csd.team[key]||0;
+        var col=cntColor(key);
+        var sublabel=key==='0-1'?'1st pitch strikes':'PAs reached';
+        if(isHitter&&key==='0-1'){
+          var fps=csd.team['fps']||0;
+          sublabel='1st pitch strikes'+(fps>0?'<br><span style="font-size:8px;color:#8891a4">* '+fps+' first-pitch swings</span>':'');
+        }
+        return '<div style="background:'+col.bg+';border:1px solid '+col.border+';border-radius:8px;padding:10px 8px;">'+
+          '<div style="font-size:11px;font-weight:700;color:'+col.text+'">'+key+'</div>'+
+          '<div style="font-size:22px;font-weight:900;color:'+col.num+';line-height:1.1;margin:3px 0">'+n+'</div>'+
+          '<div style="font-size:8px;color:#8891a4">'+sublabel+'</div>'+
+          '</div>';
+      }).join('');
+      var names=Object.keys(csd.players).filter(function(nm){return nm&&!/undefined/i.test(nm);})
+        .sort(function(a,b){return (csd.players[b]['0-0']||0)-(csd.players[a]['0-0']||0);});
+      function buildCntTable(nms){
+        return '<table class="mob-table">'+
+          '<thead><tr>'+
+          '<th>'+(isHitter?'Batter':'Pitcher')+'</th>'+
+          COG_KEYS.map(function(key){var col=cntColor(key);return '<th style="text-align:center;background:'+col.bg+';color:'+col.text+';">'+key+'</th>';}).join('')+
+          '</tr></thead><tbody>'+
+          nms.map(function(nm,i){
+            return '<tr style="'+(i%2===0?'background:#0a0e15':'')+'">'+'<td style="font-weight:700;white-space:nowrap">'+fmtN(nm)+'</td>'+
+              COG_KEYS.map(function(key){
+                var val=(csd.players[nm]&&csd.players[nm][key])||0;
+                var col=cntColor(key);
+                var extra='';
+                if(isHitter&&key==='0-1'&&csd.players[nm]){var fp=csd.players[nm].fps||0;if(fp>0)extra='<br><span style="font-size:7px;color:#8891a4">*'+fp+'</span>';}
+                return '<td style="text-align:center;background:'+col.bg+';color:'+col.num+';font-weight:700">'+val+extra+'</td>';}).join('')+
+            '</tr>';
+          }).join('')+'</tbody></table>';
+      }
+      var tableHTML=!names.length?'':'<div style="margin-top:10px">'+buildCntTable(names)+'</div>';
+      return '<div style="background:#111827;border:1px solid #1e2330;border-radius:8px;padding:12px;margin-bottom:12px;">'+
+        '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:10px;">'+teamCards+'</div>'+
+        tableHTML+'</div>';
+    }
+    var csdPitch=buildCountData(activePitches,'pitcher');
+    var csdHitPitches=p.isTournamentMode&&effectiveTid?pitches.filter(function(x){return(x.homeTeamId===effectiveTid&&x.topBottom==='Bottom')||(x.awayTeamId===effectiveTid&&x.topBottom==='Top');}):activeHitPitches;
+    var savedValidBatters=validBatters;
+    validBatters={};
+    csdHitPitches.forEach(function(x){if(x.batter)validBatters[x.batter]=true;});
+    var csdHit=buildCountData(csdHitPitches,'batter');
+    validBatters=savedValidBatters;
+    var countCardsHTML='<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:12px;">'+
+      COG.map(function(c){
+        var key=c.b+'-'+c.s;
+        var n=csdHit.team[key]||0;
+        var col=cntColor(key);
+        return '<div style="background:'+col.bg+';border:1px solid '+col.border+';border-radius:8px;padding:10px 8px;">'+
+          '<div style="font-size:11px;font-weight:700;color:'+col.text+'">'+key+'</div>'+
+          '<div style="font-size:22px;font-weight:900;color:'+col.num+';line-height:1.1;margin:3px 0">'+n+'</div>'+
+          '<div style="font-size:8px;color:#8891a4">PAs reached</div></div>';
+      }).join('')+
+    '</div>';
+    var mlbAvg={'0-0':'.299','0-1':'.260','0-2':'.170','1-0':'.330','1-1':'.277','1-2':'.188','2-0':'.366','2-1':'.311','2-2':'.200','3-0':'.425','3-1':'.376','3-2':'.220'};
+    var countCtx={'0-0':'First pitch','0-1':'Pitcher ahead','0-2':'Two strikes','1-0':'Hitter ahead','1-1':'Even','1-2':'Two strikes','2-0':'Hitter count','2-1':'Hitter ahead','2-2':'Full battle','3-0':'Walk count','3-1':'Damage count','3-2':'Full count'};
+    var baByCount=COG.map(function(c){
+      var key=c.b+'-'+c.s;
+      var cp=activeHitPitches.filter(function(x){return x.balls===c.b&&x.strikes===c.s&&x.pitchCall!=='BallCalled';});
+      var cHits=cp.filter(function(x){return['Single','Double','Triple','HomeRun'].includes(x.playResult);}).length;
+      var cPAs=new Set(cp.filter(function(p){
+      return p.batter&&p.inning&&p.topBottom
+        &&p.korbb!=='Walk'&&p.playResult!=='Walk'
+        &&p.pitchCall!=='HitByPitch'&&p.playResult!=='HitByPitch';
+    }).map(function(p){return p.inning+'-'+p.topBottom+'-'+p.batter;})).size;
+      var avg2=cPAs>0?'.'+String(Math.round(cHits/cPAs*1000)).padStart(3,'0'):'&#8212;';
+      var avgNum=cPAs>0?cHits/cPAs:null;
+      var bgColor=avgNum==null?'transparent':avgNum>=0.25?'rgba(34,197,94,0.2)':avgNum>=0.20?'rgba(234,179,8,0.2)':'rgba(239,68,68,0.2)';
+      var textColor=avgNum==null?'#8891a4':avgNum>=0.25?'#22c55e':avgNum>=0.20?'#eab308':'#ef4444';
+      return '<tr>'+
+        '<td style="font-weight:700">'+key+'</td>'+
+        '<td style="color:#8891a4">'+countCtx[key]+'</td>'+
+        '<td>'+cHits+' / '+cPAs+'</td>'+
+        '<td><span style="background:'+bgColor+';color:'+textColor+';font-weight:700;padding:2px 8px;border-radius:4px;display:inline-block;">'+avg2+'</span></td>'+
+        '<td style="color:#8891a4">'+mlbAvg[key]+'</td>'+
+      '</tr>';
     }).join('');
 
     // ══ PITCHING tab ══
@@ -3404,6 +3771,61 @@ function shareReport() {
         '</tr>';
     }).join('');
 
+    var PITCH_ORDER_MOB=['Fastball','Sinker','Cutter','Slider','Curveball','Changeup','Splitter'];
+    var pitchTypesMob=PITCH_ORDER_MOB.filter(function(t){return activePitches.some(function(x){return x.pitchType===t;});});
+    var PITCH_COLORS_MOB={'Fastball':'#ef4444','Sinker':'#f97316','Curveball':'#3b82f6','Slider':'#eab308','Changeup':'#22c55e','Cutter':'#a855f7','Splitter':'#06b6d4'};
+    function ptColorMob(t){return PITCH_COLORS_MOB[t]||'#8891a4';}
+
+    // Pitch sequencing
+    var seqAfterLabelsMob=['1st Pitch'].concat(PITCH_ORDER_MOB);
+    var seqRowsMob=seqAfterLabelsMob.filter(function(label){
+      if(label==='1st Pitch')return activePitches.length>0;
+      return activePitches.some(function(x){return x.pitchType===label;});
+    }).map(function(label){
+      var prev=label==='1st Pitch'
+        ?activePitches.filter(function(x,i){return i>0;})
+        :activePitches.filter(function(x,i){return i>0&&activePitches[i-1].pitchType===label;});
+      var counts={};
+      prev.forEach(function(x){if(x.pitchType)counts[x.pitchType]=(counts[x.pitchType]||0)+1;});
+      return{label:label,counts:counts,total:prev.length};
+    }).filter(function(r){return r.total>0;});
+
+    // Count sequencing
+    var cntGroupsMob=[
+      {label:'1P',filter:function(x){return x.balls===0&&x.strikes===0;}},
+      {label:'Ahead',filter:function(x){return x.strikes>x.balls;}},
+      {label:'Behind',filter:function(x){return x.balls>x.strikes;}},
+      {label:'Even',filter:function(x){return x.balls===x.strikes&&x.balls>0;}},
+      {label:'Full',filter:function(x){return x.balls===3&&x.strikes===2;}},
+    ];
+    var cntSeqRowsMob=cntGroupsMob.map(function(g){
+      var pp=activePitches.filter(g.filter);
+      var counts={};
+      pp.forEach(function(x){if(x.pitchType)counts[x.pitchType]=(counts[x.pitchType]||0)+1;});
+      return{label:g.label,counts:counts,total:pp.length};
+    }).filter(function(r){return r.total>0;});
+
+    // Sequencing table renderer
+    function seqTableMob(rows,allTypes){
+      var header='<tr><th style="text-align:left;padding:5px 8px;font-size:9px;font-weight:700;letter-spacing:0.05em;text-transform:uppercase;color:#8891a4;border-bottom:1px solid #1e2330;white-space:nowrap;min-width:80px;"></th>'+
+        allTypes.map(function(t){
+          return '<th style="padding:5px 8px;font-size:9px;font-weight:700;color:'+ptColorMob(t)+';border-bottom:1px solid #1e2330;text-align:center;white-space:nowrap;">'+
+            '<span style="display:inline-block;width:7px;height:7px;border-radius:50%;background:'+ptColorMob(t)+';margin-right:3px;vertical-align:middle;"></span>'+t+'</th>';
+        }).join('')+'</tr>';
+      var bodyRows=rows.map(function(r,i){
+        var bg=i%2===0?'background:#0d1117;':'';
+        return '<tr style="'+bg+'"><td style="padding:4px 8px;font-size:10px;font-weight:600;color:#8891a4;white-space:nowrap;">After '+r.label+'</td>'+
+          allTypes.map(function(t){
+            var n=r.counts[t]||0;
+            var pv=r.total>0?Math.round(n/r.total*100):0;
+            return '<td style="padding:4px 8px;text-align:center;font-size:10px;">'+
+              (n>0?'<span style="color:'+ptColorMob(t)+';font-weight:700">'+pv+'%</span><span style="color:#8891a4;font-size:9px"> ('+n+')</span>':'<span style="color:#3a3f4c;">&#8212;</span>')+
+              '</td>';
+          }).join('')+'</tr>';
+      }).join('');
+      return '<table style="width:100%;border-collapse:collapse;font-size:10px;">'+header+bodyRows+'</table>';
+    }
+
     // ══ DECISION MAKING tab ══
     var dmP=activeHitPitches;
     var dmZone=dmP.filter(function(x){return inZone(x);});
@@ -3417,8 +3839,8 @@ function shareReport() {
     var dmWh=dmP.filter(function(x){return x.pitchCall==='StrikeSwinging';}).length;
     var dmGoodDec=dmZSw+dmTaken;
     var dmGrade=dmP.length>0?(dmGoodDec/dmP.length*100):0;
-    var dmGradeL=dmGrade>=70?'Elite':dmGrade>=60?'Advanced':dmGrade>=50?'Developing':dmGrade>=40?'Focus Area':'D';
-    var dmGradeC=dmGrade>=70?'#22c55e':dmGrade>=60?'#0ea5e9':dmGrade>=50?'#eab308':'#ef4444';
+    var dmGradeL=dmGrade>=86?'Elite':dmGrade>=65?'Advanced':dmGrade>=50?'Developing':'Focus Area';
+    var dmGradeC=dmGrade>=86?'#22c55e':dmGrade>=65?'#00c8ff':dmGrade>=50?'#eab308':dmGrade>=35?'#f97316':'#ef4444';
 
     var dmTypeRows=function(){
       var rows=[
@@ -3453,8 +3875,8 @@ function shareReport() {
       var bOut=bp.filter(function(x){return!inZone(x);});
       var ballsTaken=bOut.filter(function(x){return!['StrikeSwinging','Foul','FoulTip','InPlay'].includes(x.pitchCall);}).length;
       var dmgScore=bp.length>0?(zoneSwings+ballsTaken)/bp.length*100:0;
-      var dmgL=dmgScore>=85?'Elite':dmgScore>=75?'Advanced':dmgScore>=65?'Developing':'Focus Area';
-      var dmgC=dmgScore>=85?'#22c55e':dmgScore>=75?'#00c8ff':dmgScore>=65?'#eab308':dmgScore>=55?'#f97316':'#ef4444';
+      var dmgL=dmgScore>=86?'Elite':dmgScore>=65?'Advanced':dmgScore>=50?'Developing':'Focus Area';
+      var dmgC=dmgScore>=86?'#22c55e':dmgScore>=65?'#00c8ff':dmgScore>=50?'#eab308':dmgScore>=35?'#f97316':'#ef4444';
       var zSwingPct=bZone.length?zoneSwings/bZone.length*100:null;
       var goodEyePct=bOut.length?ballsTaken/bOut.length*100:null;
       return '<div class="player-card" style="margin-bottom:10px">'+
@@ -3471,11 +3893,57 @@ function shareReport() {
           '</div>'+
         '</div>'+
         '<div class="pc-stats" style="grid-template-columns:1fr 1fr">'+
-          '<div class="pc-stat"><div class="pc-stat-v" style="font-size:15px">'+(zSwingPct!=null?zSwingPct.toFixed(1)+'%':'&#8212;')+'</div><div class="pc-stat-l">Zone Swing%</div></div>'+
+          '<div class="pc-stat"><div class="pc-stat-v" style="font-size:15px;color:'+(metricColor(zSwingPct,'zSwing')||'#e8eaf0')+'">'+(zSwingPct!=null?zSwingPct.toFixed(1)+'%':'&#8212;')+'</div><div class="pc-stat-l">Zone Swing%</div></div>'+
           '<div class="pc-stat"><div class="pc-stat-v" style="font-size:15px;color:'+(metricColor(goodEyePct,'goodEye')||'#e8eaf0')+'">'+(goodEyePct!=null?goodEyePct.toFixed(1)+'%':'&#8212;')+'</div><div class="pc-stat-l">Good Eye%</div></div>'+
         '</div>'+
       '</div>';
     }).join('');
+
+    function whiffZoneSVG(pitchesList, inZoneOnly, label) {
+      function _inZone(px){ return px.pls>=-0.83&&px.pls<=0.83&&px.plh>=1.5&&px.plh<=3.5; }
+      var W=320,H=300,PAD=36;
+      var zW=W-PAD*2,zH=H-PAD*2-20;
+      function tx(pls){ return PAD+((pls+2.5)/5)*zW; }
+      function ty(plh){ return H-PAD-20-((plh/6)*zH); }
+      var szX1=tx(-0.83),szX2=tx(0.83),szY1=ty(3.5),szY2=ty(1.5);
+      var filtered=inZoneOnly
+        ?pitchesList.filter(function(x){return _inZone(x);})
+        :pitchesList.filter(function(x){return!_inZone(x)&&['StrikeSwinging','Foul','FoulTip','InPlay'].includes(x.pitchCall);});
+      var whiffs=filtered.filter(function(x){return x.pitchCall==='StrikeSwinging';});
+      var contacts=filtered.filter(function(x){return x.pitchCall!=='StrikeSwinging';});
+      var swingCount=filtered.filter(function(x){return['StrikeSwinging','Foul','FoulTip','InPlay'].includes(x.pitchCall);}).length;
+      var whiffPctVal=swingCount>0?(whiffs.length/swingCount*100).toFixed(1):'&#8212;';
+      var zoneRect='<rect x="'+szX1.toFixed(1)+'" y="'+szY1.toFixed(1)+'" width="'+(szX2-szX1).toFixed(1)+'" height="'+(szY2-szY1).toFixed(1)+'" fill="rgba(6,182,212,0.06)" stroke="#06b6d4" stroke-width="1.5" rx="1"/>';
+      var contactDots=contacts.filter(function(x){return x.pls!=null&&x.plh!=null;}).map(function(x){
+        return '<circle cx="'+tx(x.pls).toFixed(1)+'" cy="'+ty(x.plh).toFixed(1)+'" r="5" fill="none" stroke="'+ptColor(x.pitchType||'')+'" stroke-width="1.5" opacity="0.7"/>';
+      }).join('');
+      var whiffDots=whiffs.filter(function(x){return x.pls!=null&&x.plh!=null;}).map(function(x){
+        var cx=tx(x.pls).toFixed(1),cy=ty(x.plh).toFixed(1);
+        var c=ptColor(x.pitchType||'');
+        return '<circle cx="'+cx+'" cy="'+cy+'" r="5" fill="'+c+'" stroke="rgba(0,0,0,0.3)" stroke-width="0.5" opacity="0.85"/>'+
+               '<line x1="'+(tx(x.pls)-3).toFixed(1)+'" y1="'+(ty(x.plh)-3).toFixed(1)+'" x2="'+(tx(x.pls)+3).toFixed(1)+'" y2="'+(ty(x.plh)+3).toFixed(1)+'" stroke="#fff" stroke-width="1.5"/>'+
+               '<line x1="'+(tx(x.pls)+3).toFixed(1)+'" y1="'+(ty(x.plh)-3).toFixed(1)+'" x2="'+(tx(x.pls)-3).toFixed(1)+'" y2="'+(ty(x.plh)+3).toFixed(1)+'" stroke="#fff" stroke-width="1.5"/>';
+      }).join('');
+      var axisY=['4','3','2','1'].map(function(v){return '<text x="'+(PAD-6)+'" y="'+ty(parseInt(v)+0.5).toFixed(1)+'" text-anchor="end" font-size="9" fill="#3a3f4c" font-family="Poppins,sans-serif">'+v+'</text>';}).join('');
+      var legend='<circle cx="'+PAD+'" cy="'+(H-8)+'" r="5" fill="#666"/>'+
+        '<line x1="'+(PAD-3)+'" y1="'+(H-11)+'" x2="'+(PAD+3)+'" y2="'+(H-5)+'" stroke="#fff" stroke-width="1.5"/>'+
+        '<line x1="'+(PAD+3)+'" y1="'+(H-11)+'" x2="'+(PAD-3)+'" y2="'+(H-5)+'" stroke="#fff" stroke-width="1.5"/>'+
+        '<text x="'+(PAD+10)+'" y="'+(H-4)+'" font-size="9" fill="#8891a4" font-family="Poppins,sans-serif">Whiff</text>'+
+        '<circle cx="'+(PAD+70)+'" cy="'+(H-8)+'" r="5" fill="none" stroke="#666" stroke-width="1.5"/>'+
+        '<text x="'+(PAD+80)+'" y="'+(H-4)+'" font-size="9" fill="#8891a4" font-family="Poppins,sans-serif">Contact</text>';
+      var statBar='<div style="background:#1a1020;border-radius:0 0 8px 8px;padding:10px 16px;text-align:center;">'+
+        '<div style="font-size:10px;font-weight:700;letter-spacing:0.07em;text-transform:uppercase;color:#8891a4;margin-bottom:4px;">'+(inZoneOnly?'ZONE WHIFF %':'CHASE WHIFF %')+'</div>'+
+        '<div style="font-size:28px;font-weight:900;color:'+(inZoneOnly?'#0ea5e9':'#f59e0b')+';">'+whiffPctVal+(whiffPctVal!=='&#8212;'?'<span style="font-size:16px">%</span>':'')+'</div>'+
+        '<div style="font-size:10px;color:#8891a4;margin-top:2px;">'+whiffs.length+' whiffs on '+swingCount+' swings</div>'+
+      '</div>';
+      return '<div style="background:#111827;border:1px solid #1e2330;border-radius:8px;overflow:hidden;margin-bottom:12px;">'+
+        '<div style="padding:10px 14px;font-size:10px;font-weight:700;letter-spacing:0.07em;text-transform:uppercase;color:#8891a4;border-bottom:1px solid #1e2330;">'+label+'</div>'+
+        '<svg width="100%" viewBox="0 0 '+W+' '+H+'" xmlns="http://www.w3.org/2000/svg" style="display:block;background:#0d1117;">'+
+          zoneRect+axisY+contactDots+whiffDots+legend+
+        '</svg>'+
+        statBar+
+      '</div>';
+    }
 
     // ══ Assemble HTML ══
     var evWinPct=evenPP.length?(evenWins.length/evenPP.length*100):null;
@@ -3484,6 +3952,9 @@ function shareReport() {
     var dmGoodEyePctVal=dmOut.length?(dmTaken/dmOut.length*100):null;
     var dmChasePctVal=dmOut.length?(dmChase/dmOut.length*100):null;
     var dmWhiffPctVal=dmSw>0?(dmWh/dmSw*100):null;
+    var dmZSwPctVal=dmZone.length?(dmZSw/dmZone.length*100):null;
+    var pitchWhiffPctVal=swingsPP.length?(whiffsPP.length/swingsPP.length*100):null;
+    var pitchChasePctVal=outsidePP.length?(chasesPP.length/outsidePP.length*100):null;
     return '<!DOCTYPE html><html lang="en"><head>'+
       '<meta charset="UTF-8">'+
       '<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1">'+
@@ -3517,6 +3988,10 @@ function shareReport() {
       '.sc-v{font-weight:900;font-size:22px;line-height:1;}'+
       '.sc-u{font-size:11px;font-weight:400;color:#8891a4;}'+
       '.sc-s{font-size:9px;color:#8891a4;margin-top:2px;}'+
+      '.mob-tip-wrap{position:relative;display:inline-block;margin-left:4px;vertical-align:middle;}'+
+      '.mob-tip-icon{display:inline-flex;align-items:center;justify-content:center;width:14px;height:14px;border-radius:50%;background:#1e2330;color:#8891a4;font-size:9px;font-weight:700;cursor:pointer;border:1px solid #2a3045;}'+
+      '.mob-tip-box{display:none;position:absolute;bottom:120%;left:50%;transform:translateX(-50%);background:#1e2330;border:1px solid #2a3045;border-radius:6px;padding:8px 10px;font-size:11px;color:#c9d1d9;width:220px;z-index:999;line-height:1.5;}'+
+      '.mob-tip-box.active{display:block;}'+
       // player cards
       '.player-card{background:#181c24;border:1px solid #252a35;border-radius:8px;padding:12px;margin-bottom:8px;}'+
       '.pc-top{display:flex;align-items:center;gap:8px;margin-bottom:8px;flex-wrap:nowrap;}'+
@@ -3558,84 +4033,133 @@ function shareReport() {
 
       // ── PANEL: Coach Analysis ──
       '<div class="mob-panel active" id="mp-coach">'+
-        sh('⚾','Pitching Summary','#0ea5e9')+
+        sh('','Pitching Summary','#0ea5e9')+
         '<div class="sc-grid">'+
-          scm('STRIKE %',strikePctVal!=null?strikePctVal.toFixed(1):'&#8212;','%',strikes+' of '+activePitches.length+' pitches','#1e2330',metricColor(strikePctVal,'strikeTotal'))+
-          scm('1ST PITCH STRIKE %',fpsPctVal!=null?fpsPctVal.toFixed(1):'&#8212;','%',fpStrikes.length+'/'+fps.length,'#1e2330',metricColor(fpsPctVal,'fpStrike'))+
-          scm("EVEN'S WINS",evWinPct!=null?evWinPct.toFixed(1):'&#8212;','%',evenWins.length+'/'+evenPP.length+' even counts','#1e2330',metricColor(evWinPct,'evensWins'))+
-          sc('PITCHER WHIFF %',   (swingsPP.length?((whiffsPP.length/swingsPP.length)*100).toFixed(1):'&#8212;'),'%',whiffsPP.length+' whiffs / '+swingsPP.length+' swings','#22c55e')+
-          sc('CHASE RATE',        (outsidePP.length?((chasesPP.length/outsidePP.length)*100).toFixed(1):'&#8212;'),'%',chasesPP.length+' chases / '+outsidePP.length+' outside','#f59e0b')+
+          scm('STRIKE %',strikePctVal!=null?strikePctVal.toFixed(1):'&#8212;','%',strikes+' of '+activePitches.length+' pitches','#1e2330',metricColor(strikePctVal,'strikeTotal'),"How often the pitcher throws a strike out of all pitches. Above 60% is strong command. Below 48% means the pitcher is consistently working from behind in counts.<br><br><span style='font-size:10px;color:#8891a4'>Green: ≥60% &nbsp;·&nbsp; Yellow: 48–59% &nbsp;·&nbsp; Red: &lt;48%</span>")+
+          scm('1ST PITCH STRIKE %',fpsPctVal!=null?fpsPctVal.toFixed(1):'&#8212;','%',fpStrikes.length+'/'+fps.length,'#1e2330',metricColor(fpsPctVal,'fpStrike'),"How often the pitcher gets a strike on the very first pitch of an at-bat. Setting the tone early is the single most predictive pitch of a PA outcome. Above 60% is strong.<br><br><span style='font-size:10px;color:#8891a4'>Green: ≥60% &nbsp;·&nbsp; Yellow: 48–59% &nbsp;·&nbsp; Red: &lt;48%</span>")+
+          scm("EVEN'S WINS",evWinPct!=null?evWinPct.toFixed(1):'&#8212;','%',evenWins.length+'/'+evenPP.length+' even counts','#1e2330',metricColor(evWinPct,'evensWins'),"How often the pitcher throws a strike when the count is even (1-1, 2-2, 3-2). Winning even counts keeps the pitcher in control of the at-bat and avoids hitter-friendly counts.<br><br><span style='font-size:10px;color:#8891a4'>Green: ≥62% &nbsp;·&nbsp; Yellow: 50–61% &nbsp;·&nbsp; Red: &lt;50%</span>")+
+          scm('PITCHER WHIFF %',pitchWhiffPctVal!=null?pitchWhiffPctVal.toFixed(1):'&#8212;','%',whiffsPP.length+' whiffs / '+swingsPP.length+' swings','#1e2330',metricColor(pitchWhiffPctVal,'pitcherWhiff'),'How often batters completely miss when swinging at this pitcher\'s pitches. Higher is better for pitchers — it means the stuff is genuinely hard to make contact with.<br><br><span style="font-size:10px;color:#8891a4">Green: ≥30% &nbsp;·&nbsp; Yellow: 15–29% &nbsp;·&nbsp; Red: &lt;15%</span>')+
+          scm('CHASE RATE',pitchChasePctVal!=null?pitchChasePctVal.toFixed(1):'&#8212;','%',chasesPP.length+' chases / '+outsidePP.length+' outside','#1e2330',metricColor(pitchChasePctVal,'chase'),'How often batters swing at pitches outside the strike zone against this pitching staff. Higher is better for pitchers — it means they are generating weak decisions from hitters.<br><br><span style="font-size:10px;color:#8891a4">Green: ≥28% &nbsp;·&nbsp; Yellow: 15–27% &nbsp;·&nbsp; Red: &lt;15%</span>')+
           sc('BEST PITCH (WHIFF)',bestWhiffType||'&#8212;','',bestWhiffType?Math.round(bestWhiffPct*100)+'% whiff':'','#f59e0b')+
         '</div>'+
-        sh('🔥','Pitcher Highlights','#0ea5e9')+
+        sh('','Team PEG','#eab308')+
+        '<div style="text-align:center;padding:12px;background:#111827;border:1px solid #1e2330;border-radius:8px;margin-bottom:12px;">'+
+          '<div style="font-size:28px;font-weight:900;color:'+pegColor+';">'+pegLabel+'</div>'+
+          (pegScore!=null?'<div style="font-size:13px;color:'+pegColor+';opacity:0.8;">('+pegScore.toFixed(1)+')</div>':'')+
+          '<div style="font-size:11px;color:#8891a4;margin-top:4px;">Pitching Execution Grade avg across all pitchers '+mobTip('<strong style="color:#e8eaf0;">Pitching Execution Grade</strong><br>Grades a pitcher\'s execution based on strike throwing (30%), first pitch aggression (30%), even count wins (15%), whiff rate (15%), and chase rate (10%).<br><br><span style="color:#8891a4;font-size:10px;">Elite: 65+ &nbsp;·&nbsp; Advanced: 55–64 &nbsp;·&nbsp; Developing: 45–54 &nbsp;·&nbsp; Focus Area: &lt;45</span>')+'</div>'+
+        '</div>'+
+        sh('','Pitcher Highlights','#0ea5e9')+
         pitcherCards+
-        sh('🏏','Hitting Summary','#22c55e')+
+        sh('','Count Situations &#8212; Pitching','#0ea5e9')+
+        '<div style="font-size:11px;color:#8891a4;margin-bottom:8px;">Unique plate appearances where each count was reached (pitcher perspective)</div>'+
+        '<div style="overflow-x:auto">'+renderCountGrid(csdPitch,false)+'</div>'+
+        sh('','Hitting Summary','#22c55e')+
         '<div class="sc-grid">'+
-          sc('TEAM BA',       hBA,'',hBA_hits+' hits / '+hPAs+' PAs','#0ea5e9')+
+          scm('TEAM BA',hBA,'',hBA_hits+' hits / '+hPAs+' PAs','#1e2330',metricColor(hPAs>0?hBA_hits/hPAs:null,'teamBA'),'Team batting average — hits divided by plate appearances excluding walks. The foundational measure of how often the team gets on base via a hit.<br><br><span style="font-size:10px;color:#8891a4">Green: ≥.280 &nbsp;·&nbsp; Yellow: .200–.279 &nbsp;·&nbsp; Red: &lt;.200</span>')+
           sc('AVG EXIT VELO', (hEVs.length?safeAvg(hEVs).toFixed(1):'&#8212;'),'mph',hEVs.length+' BIP','#22c55e')+
           scm('DAMAGE COUNT',  dcAvg,'',dcH+'-for-'+dcPAs,'#1e2330',metricColor(dcPAs>0?dcH/dcPAs:null,'damageCount'))+
+          scm('HITTER WHIFF %', hWhiffPctVal!=null?hWhiffPctVal.toFixed(1):'&#8212;','%',hWhiffs+' whiffs / '+hSwings+' swings','#1e2330',metricColor(hWhiffPctVal,'whiff'),'How often the hitter completely misses when swinging. Lower is better — high whiff rates indicate trouble making contact with quality pitches.<br><br><span style="font-size:10px;color:#8891a4">Green: &lt;22% &nbsp;·&nbsp; Yellow: 22–33% &nbsp;·&nbsp; Red: &gt;33%</span>')+
+          scm('GOOD EYE %', goodEyePctVal!=null?goodEyePctVal.toFixed(1):'&#8212;','%',hTaken+' taken / '+hOutside.length+' outside','#1e2330',metricColor(goodEyePctVal,'goodEye'),'How often the hitter correctly takes a pitch outside the strike zone. Higher is better — it shows strong pitch recognition and plate discipline.<br><br><span style="font-size:10px;color:#8891a4">Green: ≥60% &nbsp;·&nbsp; Yellow: 42–59% &nbsp;·&nbsp; Red: &lt;42%</span>')+
+          sc('HARD HIT %', hEVs.length?((hEVs.filter(function(v){return v>=90;}).length/hEVs.length)*100).toFixed(1)+'%':'&#8212;','',hEVs.filter(function(v){return v>=90;}).length+' balls ≥90 mph','#f59e0b')+
         '</div>'+
-        sh('💥','Hitter Highlights','#22c55e')+
+        sh('','Team PDG','#22c55e')+
+        '<div style="text-align:center;padding:12px;background:#111827;border:1px solid #1e2330;border-radius:8px;margin-bottom:12px;">'+
+          '<div style="font-size:28px;font-weight:900;color:'+pdgColor+';">'+pdgLabel+'</div>'+
+          (pdgScore!=null?'<div style="font-size:13px;color:'+pdgColor+';opacity:0.8;">('+pdgScore.toFixed(1)+')</div>':'')+
+          '<div style="font-size:11px;color:#8891a4;margin-top:4px;">Plate Discipline Grade avg across all batters '+mobTip('<strong style="color:#e8eaf0;">Plate Discipline Grade (PDG)</strong><br>Grades a hitter\'s pitch recognition and discipline. Formula: Good Eye% (30%) + (100 - Chase%) (30%) + (100 - Whiff%) (25%) + Z-Swing% (15%).<br><br><span style="color:#8891a4;font-size:10px;">Elite: 75+ &nbsp;·&nbsp; Advanced: 65–74 &nbsp;·&nbsp; Developing: 55–64 &nbsp;·&nbsp; Focus Area: &lt;55</span>')+'</div>'+
+        '</div>'+
+        sh('','Count Situations &#8212; Hitting','#22c55e')+
+        '<div style="font-size:11px;color:#8891a4;margin-bottom:8px;">Unique plate appearances where each count was reached (hitter perspective)</div>'+
+        '<div style="overflow-x:auto">'+renderCountGrid(csdHit,true)+'</div>'+
+        sh('','Hitter Highlights','#22c55e')+
         hitterCards+
       '</div>'+
 
       // ── PANEL: Pitching ──
       '<div class="mob-panel" id="mp-pitching">'+
-        sh('📊','Pitch Arsenal &#8212; Metric Review','#0ea5e9')+
+        sh('','Pitcher Highlights','#0ea5e9')+
+        pitcherCards+
+        sh('','Pitch Arsenal &#8212; Metric Review','#0ea5e9')+
         '<div style="overflow-x:auto">'+
           '<table class="mob-table">'+
             '<thead><tr><th>Pitch</th><th>Avg Velo</th><th>Max Velo</th><th>Spin</th><th>Whiff%</th><th>Strike%</th></tr></thead>'+
             '<tbody>'+pmrRows+'</tbody>'+
           '</table>'+
         '</div>'+
+        sh('','Pitch Sequencing','#a855f7')+
+        '<div style="overflow-x:auto;margin-bottom:12px;">'+
+          (seqRowsMob.length?seqTableMob(seqRowsMob,pitchTypesMob):'<div style="color:#8891a4;font-size:12px;padding:8px;">No sequencing data available.</div>')+
+        '</div>'+
+        sh('','Count Sequencing','#0ea5e9')+
+        '<div style="overflow-x:auto;margin-bottom:12px;">'+
+          (cntSeqRowsMob.length?seqTableMob(cntSeqRowsMob,pitchTypesMob):'<div style="color:#8891a4;font-size:12px;padding:8px;">No count sequencing data available.</div>')+
+        '</div>'+
       '</div>'+
 
       // ── PANEL: Hitting ──
       '<div class="mob-panel" id="mp-hitting">'+
-        sh('🏏','Hitting Summary','#22c55e')+
+        sh('','Hitting Summary','#22c55e')+
         '<div class="sc-grid">'+
-          sc('TEAM BA',       hBA,'',hBA_hits+' hits / '+hPAs+' PAs','#0ea5e9')+
+          scm('TEAM BA',hBA,'',hBA_hits+' hits / '+hPAs+' PAs','#1e2330',metricColor(hPAs>0?hBA_hits/hPAs:null,'teamBA'),'Team batting average — hits divided by plate appearances excluding walks. The foundational measure of how often the team gets on base via a hit.<br><br><span style="font-size:10px;color:#8891a4">Green: ≥.280 &nbsp;·&nbsp; Yellow: .200–.279 &nbsp;·&nbsp; Red: &lt;.200</span>')+
           sc('AVG EXIT VELO', (hEVs.length?safeAvg(hEVs).toFixed(1):'&#8212;'),'mph',hEVs.length+' BIP','#22c55e')+
           sc('MAX EXIT VELO', (hEVs.length?safeMax(hEVs).toFixed(1):'&#8212;'),'mph','Fouls excluded','#0ea5e9')+
           sc('HARD HIT %',    pct(hEVs.filter(function(v){return v>=90;}).length,hEVs.length),'',hEVs.filter(function(v){return v>=90;}).length+' balls ≥90 mph','#f59e0b')+
           scm('DAMAGE COUNT',  dcAvg,'',dcH+'-for-'+dcPAs,'#1e2330',metricColor(dcPAs>0?dcH/dcPAs:null,'damageCount'))+
         '</div>'+
-        sh('💥','Hitter Highlights','#22c55e')+
+        sh('','Hitter Highlights','#22c55e')+
         hitterCards+
+        sh('','Hitter Comparison','#a855f7')+
+        hitterComparisonHTML+
+        sh('','Team Batting Average by Count','#a855f7')+
+        '<div style="font-size:11px;color:#8891a4;margin-bottom:8px;">Balls thrown in each count are excluded &#8212; only pitches the hitter could put in play are counted.</div>'+
+        '<div style="overflow-x:auto">'+
+          '<table class="mob-table">'+
+            '<thead><tr><th>Count</th><th>Context</th><th>H / PA</th><th>Team Avg</th><th>MLB Avg</th></tr></thead>'+
+            '<tbody>'+baByCount+'</tbody>'+
+          '</table>'+
+        '</div>'+
       '</div>'+
 
       // ── PANEL: Decision Making ──
       '<div class="mob-panel" id="mp-decision">'+
-        sh('🧠','Overall Decision Grade','#f59e0b')+
+        sh('','Overall Decision Grade','#f59e0b')+
         '<div class="sc-grid">'+
-          sc('DECISION GRADE', dmGrade.toFixed(1)+' '+dmGradeL,'',dmGoodDec+' good decisions / '+dmP.length+' pitches',dmGradeC)+
-          scm('GOOD EYE %',     dmGoodEyePctVal!=null?dmGoodEyePctVal.toFixed(1):'&#8212;','%',dmTaken+' taken / '+dmOut.length+' outside','#1e2330',metricColor(dmGoodEyePctVal,'goodEye'))+
-          scm('CHASE RATE',     dmChasePctVal!=null?dmChasePctVal.toFixed(1):'&#8212;','%',dmChase+' swings / '+dmOut.length+' outside','#1e2330',metricColor(dmChasePctVal,'chase'))+
-          sc('ZONE WHIFF %',   pct(dmZWh,dmZSw),'',dmZWh+' whiffs / '+dmZSw+' zone swings','#eab308')+
-          scm('HITTER WHIFF %', dmWhiffPctVal!=null?dmWhiffPctVal.toFixed(1):'&#8212;','%',dmWh+' misses / '+dmSw+' swings','#1e2330',metricColor(dmWhiffPctVal,'whiff'))+
+          sc('DECISION GRADE', dmGrade.toFixed(1)+' '+dmGradeL,'',dmGoodDec+' good decisions / '+dmP.length+' pitches',dmGradeC,'A composite grade that measures how well the hitter recognizes pitches and makes quality swing decisions. Combines good eye rate, chase avoidance, contact rate, and zone swing rate.<br><br><span style="font-size:10px;color:#8891a4">Elite: 86+ &nbsp;·&nbsp; Advanced: 65–85 &nbsp;·&nbsp; Developing: 50–64 &nbsp;·&nbsp; Focus Area: below 50</span>')+
+          scm('GOOD EYE %',     dmGoodEyePctVal!=null?dmGoodEyePctVal.toFixed(1):'&#8212;','%',dmTaken+' taken / '+dmOut.length+' outside','#1e2330',metricColor(dmGoodEyePctVal,'goodEye'),"How often the hitter correctly takes a pitch outside the strike zone as a ball. Higher is better — it shows strong pitch recognition and discipline.<br><br><span style='font-size:10px;color:#8891a4'>Green: ≥60% &nbsp;·&nbsp; Yellow: 42–59% &nbsp;·&nbsp; Red: &lt;42%</span>")+
+          scm('CHASE RATE',     dmChasePctVal!=null?dmChasePctVal.toFixed(1):'&#8212;','%',dmChase+' swings / '+dmOut.length+' outside','#1e2330',metricColor(dmChasePctVal,'chase'),"How often the hitter swings at pitches outside the strike zone. Lower is better — chasing bad pitches is one of the most exploitable weaknesses a pitcher will target.<br><br><span style='font-size:10px;color:#8891a4'>Green: &lt;28% &nbsp;·&nbsp; Yellow: 28–38% &nbsp;·&nbsp; Red: &gt;38%</span>")+
+          sc('ZONE WHIFF %',   pct(dmZWh,dmZSw),'',dmZWh+' whiffs / '+dmZSw+' zone swings','#eab308',"How often the hitter misses on pitches inside the strike zone. Even in the zone, missing pitches is a concern. Lower is better.<br><br><span style='font-size:10px;color:#8891a4'>No fixed grade — used alongside Chase Whiff % for full picture</span>")+
+          scm('HITTER WHIFF %', dmWhiffPctVal!=null?dmWhiffPctVal.toFixed(1):'&#8212;','%',dmWh+' misses / '+dmSw+' swings','#1e2330',metricColor(dmWhiffPctVal,'whiff'),"Percentage of swings that result in a complete miss. Lower is better for hitters — it shows the ability to make contact when committing to a swing.<br><br><span style='font-size:10px;color:#8891a4'>Green: &lt;22% &nbsp;·&nbsp; Yellow: 22–33% &nbsp;·&nbsp; Red: &gt;33%</span>")+
           sc('CHASE WHIFF %',  pct(dmOutWh,dmChase),'',dmOutWh+' whiffs on '+dmChase+' outside swings','#a855f7')+
-          sc('Z-SWING %',      pct(dmZSw,dmZone.length),'',dmZSw+' swings / '+dmZone.length+' zone pitches','#22c55e')+
+          scm('Z-SWING %',      dmZSwPctVal!=null?dmZSwPctVal.toFixed(1):'&#8212;','%',dmZSw+' swings / '+dmZone.length+' zone pitches','#1e2330',metricColor(dmZSwPctVal,'zSwing'),"How often the hitter swings at pitches inside the strike zone. Elite hitters are in the zone 65–87.5% of the time — aggressive but selective. Above 87.5% may indicate hacking at everything in the zone. Below 50% suggests the hitter is too passive on hittable pitches.<br><br><span style='font-size:10px;color:#8891a4'>Green: 65–87.5% · Yellow: 50–64.9% or >87.5% · Red: below 50%</span>")+
         '</div>'+
-        sh('📋','Decision Making by Pitch Type','#f59e0b')+
+        sh('','Decision Making by Pitch Type','#f59e0b')+
         '<div style="overflow-x:auto">'+
           '<table class="mob-table">'+
             '<thead><tr><th>Category</th><th>Pitches</th><th>Swings</th><th>Whiffs</th><th>Chase%</th><th>Whiff%</th></tr></thead>'+
             '<tbody>'+dmTypeRows+'</tbody>'+
           '</table>'+
         '</div>'+
-        sh('🎯','Hitter Decision Making Grades','#22c55e')+
+        sh('','Whiffs Inside &amp; Outside Zone','#0ea5e9')+
+        whiffZoneSVG(dmP,true,'WHIFFS INSIDE THE STRIKE ZONE')+
+        whiffZoneSVG(dmP,false,'WHIFFS OUTSIDE THE STRIKE ZONE')+
+        sh('','Hitter Decision Making Grades','#22c55e')+
         hitterDmgHTML+
       '</div>'+
 
       // bottom nav
       '<nav class="mob-nav">'+
-        '<button class="mob-nav-btn active" onclick="mobTab(\'coach\')" id="nav-coach"><span class="nav-icon">📋</span>Coach</button>'+
-        '<button class="mob-nav-btn" onclick="mobTab(\'pitching\')" id="nav-pitching"><span class="nav-icon">⚾</span>Pitching</button>'+
-        '<button class="mob-nav-btn" onclick="mobTab(\'hitting\')" id="nav-hitting"><span class="nav-icon">🏏</span>Hitting</button>'+
-        '<button class="mob-nav-btn" onclick="mobTab(\'decision\')" id="nav-decision"><span class="nav-icon">🧠</span>Decisions</button>'+
+        '<button class="mob-nav-btn active" onclick="mobTab(\'coach\')" id="nav-coach">Coach</button>'+
+        '<button class="mob-nav-btn" onclick="mobTab(\'pitching\')" id="nav-pitching">Pitching</button>'+
+        '<button class="mob-nav-btn" onclick="mobTab(\'hitting\')" id="nav-hitting">Hitting</button>'+
+        '<button class="mob-nav-btn" onclick="mobTab(\'decision\')" id="nav-decision">Decisions</button>'+
       '</nav>'+
 
       '<script>'+
+      'function mobTipToggle(el){'+
+        'var box=el.nextElementSibling;'+
+        'document.querySelectorAll(".mob-tip-box.active").forEach(function(b){if(b!==box)b.classList.remove("active");});'+
+        'box.classList.toggle("active");'+
+      '}'+
       'function mobTab(id){'+
         'document.querySelectorAll(".mob-panel").forEach(function(p){p.classList.remove("active");});'+
         'document.querySelectorAll(".mob-nav-btn").forEach(function(b){b.classList.remove("active");});'+
@@ -3898,9 +4422,11 @@ function processRows(rows) {
   // Detect team IDs from HomeTeam/AwayTeam columns first
   let homeTeamId = null, awayTeamId = null;
   for (const r of rows) {
-    if (ss(r.HomeTeam) && ss(r.HomeTeam).startsWith('WBB:')) {
-      homeTeamId = ss(r.HomeTeam);
-      awayTeamId = ss(r.AwayTeam);
+    const ht = ss(r.HomeTeam);
+    const at = ss(r.AwayTeam);
+    if (ht && (ht.startsWith('WBB:') || ht.startsWith('YAK:') || ht.startsWith('TM:') || ht.length > 3)) {
+      homeTeamId = ht;
+      awayTeamId = at;
       break;
     }
   }
@@ -3912,7 +4438,7 @@ function processRows(rows) {
     for (const r of rows) {
       for (const key of Object.keys(r)) {
         const val = ss(r[key]);
-        if (val && val.startsWith('WBB:') && val.includes('win_') &&
+        if (val && (val.startsWith('WBB:') || val.startsWith('YAK:') || val.startsWith('TM:')) &&
             key !== 'PitcherTeam' && key !== 'BatterTeam' && key !== 'CatcherTeam' &&
             key !== 'PitcherId' && key !== 'BatterId' && key !== 'CatcherId') {
           if (foundIds.indexOf(val) < 0) foundIds.push(val);
@@ -3961,7 +4487,9 @@ function processRows(rows) {
   const pitches = [], hits = [];
   rows.forEach(r => {
     const spd = sf(r.RelSpeed);
-    if (spd) {
+    const pitchCallRaw = (r.PitchCall || '').toString().trim();
+    const validPitchCalls = ['BallCalled','StrikeCalled','InPlay','Foul','StrikeSwinging','HitByPitch','FoulTip','BallIntentional','PitchoutBall','AutoBall'];
+    if (pitchCallRaw && validPitchCalls.indexOf(pitchCallRaw) >= 0) {
       let pitcherTeamNorm = null;
       const pitcherTeamRaw = swappedPitcherCols ? ss(r.Pitcher) : ss(r.PitcherTeam);
       const batterName = swappedBatterCols ? ss(r.BatterTeam) : ss(r.Batter);
@@ -3994,7 +4522,7 @@ function processRows(rows) {
       }
 
       pitches.push({
-        spd,
+        spd: spd,
         spin: sf(r.SpinRate), ivb: sf(r.InducedVertBreak),
         hb: sf(r.HorzBreak), plh: sf(r.PlateLocHeight), pls: sf(r.PlateLocSide),
         ext: sf(r.Extension), va: sf(r.VertApprAngle), zs: sf(r.ZoneSpeed),
@@ -4033,9 +4561,11 @@ function processRows(rows) {
         ev: validEV, la: sf(r.Angle), dist: sf(r.Distance), dir: sf(r.Direction),
         batter: swappedBatterCols ? ss(r.BatterTeam) : ss(r.Batter), batterTeam: batterTeamNorm,
         hitType: ss(r.HitType), playResult: ss(r.PlayResult),
+        topBottom: ss(r['Top/Bottom']),
       });
     }
   });
+  console.log('PROCESSROWS RETURN homeTeamId=' + homeTeamId + ' awayTeamId=' + awayTeamId + ' pitches=' + pitches.length);
   return { pitches, hits, homeTeamId, awayTeamId };
 }
 
@@ -4092,6 +4622,7 @@ function loadMultipleFiles(fileList) {
       results.forEach(function(data) {
         var homeId = data.homeTeamId || null;
         var awayId = data.awayTeamId || null;
+        if (awayId === 'WBB:win_bli01') console.log('BLINN AWAY STAMP homeId=' + homeId + ' awayId=' + awayId + ' pitchCount=' + (data.pitches||[]).length);
         (data.pitches || []).forEach(function(p) {
           p.homeTeamId = homeId;
           p.awayTeamId = awayId;
@@ -4318,6 +4849,7 @@ function metricColor(value, metric) {
   if (metric === 'damageCount') return v>=0.275?'#22c55e':v>=0.175?'#eab308':'#ef4444';
   if (metric === 'goodEye')     return v>=60?'#22c55e':v>=42?'#eab308':'#ef4444';
   if (metric === 'chase')       return v<28?'#22c55e':v<=38?'#eab308':'#ef4444';
+  if (metric === 'zSwing')      return v>87.5?'#eab308':v>=65?'#22c55e':v>=50?'#eab308':'#ef4444';
   if (metric === 'teamBA')      return v>=0.280?'#22c55e':v>=0.200?'#eab308':'#ef4444';
   return null;
 }
@@ -4339,7 +4871,7 @@ function getDedupedFirstPitchStats(pitchList, pitchFilter) {
   pitchList.forEach(function(p) {
     if (!p.batter || !p.inning) return;
     if (pitchFilter && !pitchFilter(p)) return;
-    var paKey = p.inning + '-' + (p.topBottom||'') + '-' + p.batter;
+    var paKey = p.inning + '-' + (p.topBottom||'') + '-' + p.batter + '-' + (p.homeTeamId||'') + '-' + (p.awayTeamId||'');
     if (!paGroups[paKey]) paGroups[paKey] = [];
     paGroups[paKey].push(p);
   });
@@ -4546,13 +5078,11 @@ function renderCoachAnalysis(pitches, hits) {
   if (!el) return;
 
   var pPitch = pitches;
-  var bPitch = pitches;
-  var bHits = hits;
+  var bFd = getFilteredBatterData();
+  var bPitch = bFd.pitches;
+  var bHits = bFd.hits;
   if (isTournamentMode && currentTournamentTeam) {
     pPitch = getFilteredPitcherData().pitches;
-    var bFd = getFilteredBatterData();
-    bPitch = bFd.pitches;
-    bHits = bFd.hits;
   }
   var total = pPitch.length || 1;
 
@@ -4604,7 +5134,7 @@ function renderCoachAnalysis(pitches, hits) {
   var hardHitPct = evs.length ? (100*hardHits/evs.length).toFixed(1) : '—';
 
   // Team BA — exclude walks from PA count
-  var hitResult = bHits.filter(function(h){ return ['Single','Double','Triple','HomeRun'].includes(h.playResult); }).length;
+  var hitResult = bPitch.filter(function(p){ return ['Single','Double','Triple','HomeRun'].includes(p.playResult); }).length;
   var xbh = bHits.filter(function(h){ return ['Double','Triple','HomeRun'].includes(h.playResult); }).length;
   // PA = unique batter+inning combos, excluding walks
   var walks = bPitch.filter(function(p){ return p.korbb==='Walk'||p.playResult==='Walk'; }).length;
@@ -4704,7 +5234,9 @@ function renderCoachAnalysis(pitches, hits) {
       var pegEvens  = s.even>0  ? 100*s.evenWin/s.even   : 0;
       var pegWhiff  = s.swings>0? 100*s.whiffs/s.swings  : 0;
       var pegChase  = s.outside>0? 100*s.chaseSwings/s.outside : 0;
-      var pegScore  = (pegStrike*0.30) + (pegFps*0.30) + (pegEvens*0.20) + (pegWhiff*0.10) + (pegChase*0.10);
+      var whiffScaled = Math.min(100, Math.max(0, (pegWhiff - 15) / (40 - 15) * 100));
+      var chaseScaled = Math.min(100, Math.max(0, (pegChase - 15) / (40 - 15) * 100));
+      var pegScore  = (pegStrike*0.30) + (pegFps*0.30) + (pegEvens*0.15) + (whiffScaled*0.15) + (chaseScaled*0.10);
       var pegLetter = pegScore>=65?'Elite':pegScore>=55?'Advanced':pegScore>=45?'Developing':'Focus Area';
       var pegColor  = pegScore>=65?'#22c55e':pegScore>=55?'#00c8ff':pegScore>=45?'#eab308':pegScore>=35?'#f97316':'#ef4444';
       return {
@@ -4738,14 +5270,8 @@ function renderCoachAnalysis(pitches, hits) {
   if (isTournamentMode && currentTournamentTeam) {
     allPitchesForBatters = rawData.pitches.filter(function(p) {
       if (!p.batter) return false;
-      // The selected team is batting when:
-      // - they are the HOME team and this pitch has batterTeam === 'HOME'
-      // - they are the AWAY team and this pitch has batterTeam === 'AWAY'
-      var homeId = p.homeTeamId;
-      var awayId = p.awayTeamId;
-      if (homeId === currentTournamentTeam) return p.batterTeam === 'HOME';
-      if (awayId === currentTournamentTeam) return p.batterTeam === 'AWAY';
-      return false;
+      return (p.homeTeamId === currentTournamentTeam && p.topBottom === 'Bottom') ||
+             (p.awayTeamId === currentTournamentTeam && p.topBottom === 'Top');
     });
   } else {
     allPitchesForBatters = (rawData && rawData.pitches) ? rawData.pitches : pitches;
@@ -4844,31 +5370,18 @@ function renderCoachAnalysis(pitches, hits) {
   }
 
   function countColor(key, pct, isPitcher) {
-    var neutral = {bg:'rgba(255,255,255,0.03)', border:'rgba(255,255,255,0.08)', text:'#8891a4', num:'#e8eaf0'};
-    if (['0-0','1-1','2-2','3-2'].indexOf(key) >= 0) return neutral;
     var G='#22c55e', Y='#eab308', R='#ef4444';
     var GB='rgba(34,197,94,0.12)', YB='rgba(234,179,8,0.12)', RB='rgba(239,68,68,0.12)';
     function col(c,b){ return {bg:b, border:c, text:c, num:c}; }
+    if (['0-0','1-1','2-2','3-2'].indexOf(key) >= 0) return col(Y,YB);
     if (isPitcher) {
-      if (key==='0-1') return pct>=55?col(G,GB):pct>=40?col(Y,YB):col(R,RB);
-      if (key==='0-2') return pct>=25?col(G,GB):pct>=15?col(Y,YB):col(R,RB);
-      if (key==='1-2') return pct>=35?col(G,GB):pct>=20?col(Y,YB):col(R,RB);
-      if (key==='1-0') return pct<30?col(G,GB):pct<=45?col(Y,YB):col(R,RB);
-      if (key==='2-0') return pct<15?col(G,GB):pct<=25?col(Y,YB):col(R,RB);
-      if (key==='2-1') return pct<25?col(G,GB):pct<=35?col(Y,YB):col(R,RB);
-      if (key==='3-0') return pct<8?col(G,GB):pct<=15?col(Y,YB):col(R,RB);
-      if (key==='3-1') return pct<12?col(G,GB):pct<=20?col(Y,YB):col(R,RB);
+      if (['0-1','0-2','1-2'].indexOf(key) >= 0) return col(G,GB);
+      if (['1-0','2-0','2-1','3-0','3-1'].indexOf(key) >= 0) return col(R,RB);
     } else {
-      if (key==='0-1') return pct<40?col(G,GB):pct<55?col(Y,YB):col(R,RB);
-      if (key==='0-2') return pct<15?col(G,GB):pct<25?col(Y,YB):col(R,RB);
-      if (key==='1-2') return pct<20?col(G,GB):pct<35?col(Y,YB):col(R,RB);
-      if (key==='1-0') return pct>=45?col(G,GB):pct>=30?col(Y,YB):col(R,RB);
-      if (key==='2-0') return pct>=25?col(G,GB):pct>=15?col(Y,YB):col(R,RB);
-      if (key==='2-1') return pct>=35?col(G,GB):pct>=25?col(Y,YB):col(R,RB);
-      if (key==='3-0') return pct>=15?col(G,GB):pct>=8?col(Y,YB):col(R,RB);
-      if (key==='3-1') return pct>=20?col(G,GB):pct>=12?col(Y,YB):col(R,RB);
+      if (['0-1','0-2','1-2'].indexOf(key) >= 0) return col(R,RB);
+      if (['1-0','2-0','2-1','3-0','3-1'].indexOf(key) >= 0) return col(G,GB);
     }
-    return neutral;
+    return col(Y,YB);
   }
 
   function countSitCardStyle(key, pov, n, teamTotal) {
@@ -5083,7 +5596,7 @@ function renderCoachAnalysis(pitches, hits) {
       out += chip('Whiff %', fmt1(p.whiff)+'%', '', metricColor(p.whiff,'pitcherWhiff'));
       out += chip('Chase Rate', fmt1(p.chase)+'%', '', metricColor(p.chase,'pitcherChase'));
       var pegTip = 'Pitching Execution Grade (PEG) measures how well a pitcher executed during the outing, independent of outcomes. ' +
-        'Formula: (Strike % x 0.30) + (1st Pitch Strike % x 0.30) + (Even\'s Wins % x 0.20) + (Whiff % x 0.10) + (Chase Rate x 0.10). ' +
+        'Formula: (Strike % x 0.30) + (1st Pitch Strike % x 0.30) + (Even\'s Wins % x 0.15) + (Whiff % x 0.15) + (Chase Rate x 0.10). ' +
         'Elite: 65+ (dominant) · Advanced: 55-64 (above avg) · Developing: 45-54 (average) · Focus Area: below 45.';
       out += '<div class="coach-standout-chip" style="border-top:2px solid '+p.peg.color+';min-width:80px;">' +
         '<div class="coach-standout-chip-label">PEG ' +
@@ -5181,7 +5694,7 @@ function renderCoachAnalysis(pitches, hits) {
     var cardStyle = countSitCardStyle(key, 'hitter', n, teamTotal);
     var fpCardNote = '';
     if (key === '0-1' && hitFirstPitchInPlay.team > 0) {
-      fpCardNote = '<div style="font-size:10px;color:var(--muted);margin-top:4px;">* ' + hitFirstPitchInPlay.team + ' first-pitch swings in play</div>';
+      fpCardNote = '<div style="font-size:10px;color:var(--muted);margin-top:4px;">* ' + hitFirstPitchInPlay.team + ' swings</div>';
     }
     var hitCardLabel = key === '0-1' ? '1st pitch strikes' : 'PAs reached';
     out += '<div style="border-radius:8px;padding:12px 14px;' + cardStyle + '">' +
@@ -5214,7 +5727,7 @@ function renderCoachAnalysis(pitches, hits) {
       if (key === '0-1') {
         var fpCell = hitFirstPitchInPlay.players[nm] || 0;
         if (fpCell > 0) {
-          cellHtml = val + '<div style="font-size:9px;color:var(--muted);font-weight:400;margin-top:2px;">*' + fpCell + ' in play</div>';
+          cellHtml = val + '<div style="font-size:9px;color:var(--muted);font-weight:400;margin-top:2px;">*' + fpCell + ' swings</div>';
         }
       }
       out += '<td style="padding:8px 6px;text-align:center;font-weight:800;' + countSitCellStyle(key, 'hitter', val, playerTotal) + '">' + cellHtml + '</td>';
@@ -5234,7 +5747,7 @@ function renderCoachAnalysis(pitches, hits) {
       out += '<div class="coach-standout-metrics">';
       out += chip('Avg EV', b.hasEV ? b.avgEV.toFixed(1)+' mph' : '—', '');
       out += chip('Hard Hit %', b.hasEV ? b.hardHitPct.toFixed(0)+'%' : '—', '');
-      out += chip('Z-Swing %', b.zSwingPct, '');
+      out += chip('Z-Swing %', b.zSwingPct, '', metricColor(parseFloat(b.zSwingPct),'zSwing'));
       out += chip('Chase %', b.chasePct, '', metricColor(parseFloat(b.chasePct),'chase'));
       out += chip('Whiff %', b.whiffPct.toFixed(1)+'%', '', metricColor(b.whiffPct,'whiff'));
       out += chip('Good Eye %', b.goodEye.toFixed(1)+'%', '', metricColor(b.goodEye,'goodEye'));
@@ -5315,7 +5828,10 @@ function renderCoachAnalysis(pitches, hits) {
     // Denominator = unique PAs where hitter had an actionable pitch in this count
     var countPAs = new Set(
       cpActionable
-        .filter(function(p) { return p.batter && p.inning; })
+        .filter(function(p) {
+          return p.batter && p.inning
+            && p.korbb !== 'Walk' && p.playResult !== 'Walk';
+        })
         .map(function(p) { return p.inning + '-' + (p.topBottom||'') + '-' + p.batter; })
     ).size;
     countStats[key] = { hits: countHits, pas: countPAs, total: cp.length, actionable: cpActionable.length };
@@ -5366,7 +5882,7 @@ function renderCoachAnalysis(pitches, hits) {
 // ============================================================
 function renderAll() {
   var pitcherData = isTournamentMode ? getFilteredPitcherData() : getFilteredData();
-  var batterData = isTournamentMode ? getFilteredBatterData() : pitcherData;
+  var batterData = getFilteredBatterData();
   var pitches = pitcherData.pitches;
   var hitterPitches = batterData.pitches;
   var hits = batterData.hits;
@@ -5410,7 +5926,7 @@ function renderAll() {
   renderFieldMap(hits);
 
   // Decision Making tab — batter POV in tournament mode
-  renderDecisionMaking(isTournamentMode ? hitterPitches : pitches);
+  renderDecisionMaking(hitterPitches);
 
   // Per-PA breakdown
   renderPABreakdown(pitchesForCharts, hits);
@@ -5840,6 +6356,9 @@ function renderPitcherBreakdown(pitches) {
     const avgFB  = fbSpeeds.length ? avg(fbSpeeds).toFixed(1) : '—';
     const maxFB  = fbSpeeds.length ? mx(fbSpeeds).toFixed(1) : '—';
     const fbNote = fbSpeeds.length ? '' : ' (no FB data)';
+    var fbMin=fbSpeeds.length?Math.min.apply(null,fbSpeeds).toFixed(1):null;
+    var fbMax=fbSpeeds.length?Math.max.apply(null,fbSpeeds).toFixed(1):null;
+    var fbRangeStr=fbSpeeds.length?('Fastball Velocity: '+fbMin+'–'+fbMax+' mph'+(parseFloat(fbMax)>=90?' 🔥':'')):'';
 
     // PEG calculations
     const pegStrikePct = pp.filter(x => ['StrikeCalled','StrikeSwinging','Foul','InPlay'].includes(x.pitchCall)).length / (pp.length||1) * 100;
@@ -5853,10 +6372,12 @@ function renderPitcherBreakdown(pitches) {
     const outsidePP    = pp.filter(x => !isInZone(x));
     const chaseSwingsPP= outsidePP.filter(x => ['StrikeSwinging','Foul','FoulTip','InPlay'].includes(x.pitchCall)).length;
     const pegChasePct  = outsidePP.length ? 100 * chaseSwingsPP / outsidePP.length : 0;
-    const pegScore     = (pegStrikePct*0.30) + (pegFpsPct*0.30) + (pegEvensPct*0.20) + (pegWhiffPct*0.10) + (pegChasePct*0.10);
+    const whiffScaled  = Math.min(100, Math.max(0, (pegWhiffPct - 15) / (40 - 15) * 100));
+    const chaseScaled  = Math.min(100, Math.max(0, (pegChasePct - 15) / (40 - 15) * 100));
+    const pegScore     = (pegStrikePct*0.30) + (pegFpsPct*0.30) + (pegEvensPct*0.15) + (whiffScaled*0.15) + (chaseScaled*0.10);
     const pegLetter    = pegScore>=65?'Elite':pegScore>=55?'Advanced':pegScore>=45?'Developing':'Focus Area';
     const pegColor     = pegScore>=65?'#22c55e':pegScore>=55?'#00c8ff':pegScore>=45?'#eab308':pegScore>=35?'#f97316':'#ef4444';
-    const pegTipText   = 'Pitching Execution Grade (PEG): (Strike % x 0.30) + (1st Pitch Strike % x 0.30) + (Even\'s Wins % x 0.20) + (Whiff % x 0.10) + (Chase Rate x 0.10). Elite: 65+ · Advanced: 55-64 · Developing: 45-54 · Focus Area: below 45.';
+    const pegTipText   = 'Pitching Execution Grade (PEG): (Strike % x 0.30) + (1st Pitch Strike % x 0.30) + (Even\'s Wins % x 0.15) + (Whiff % x 0.15) + (Chase Rate x 0.10). Elite: 65+ · Advanced: 55-64 · Developing: 45-54 · Focus Area: below 45.';
 
     return '<div class="chart-card" style="margin-bottom:12px;cursor:pointer" data-name="' + p.name.replace(/"/g,'&quot;') + '" data-role="pitcher" onclick="selectPlayer(this.dataset.name,this.dataset.role)">' +
       '<div style="display:flex;align-items:center;gap:14px;margin-bottom:14px">' +
@@ -5864,6 +6385,7 @@ function renderPitcherBreakdown(pitches) {
         '<div>' +
           '<div style="font-family:Poppins,sans-serif;font-weight:900;font-size:20px">' + formatName(p.name) + '</div>' +
           '<div style="font-size:11px;color:var(--muted)">' + p.count + ' pitches' + (p.team ? ' · ' + p.team : '') + '</div>' +
+          (fbRangeStr ? '<div style="font-size:11px;color:#8891a4;margin-top:2px;">' + fbRangeStr + '</div>' : '') +
         '</div>' +
         '<div style="margin-left:auto;font-size:11px;color:var(--muted);text-align:right">' + (typeStr || '—') + '</div>' +
       '</div>' +
@@ -5936,9 +6458,8 @@ function renderBatterBreakdown(hits) {
     const zoneSwings    = zonePitches.filter(p =>
       ['StrikeSwinging','Foul','FoulTip','InPlay'].includes(p.pitchCall)
     ).length;
-    const zSwingPct = zonePitches.length
-      ? (100 * zoneSwings / zonePitches.length).toFixed(1) + '%'
-      : '—';
+    const zSwingVal = zonePitches.length ? 100 * zoneSwings / zonePitches.length : null;
+    const zSwingPct = zSwingVal != null ? zSwingVal.toFixed(1) + '%' : '—';
 
     const outsidePitches = bp.filter(p => !isInZone(p));
     const chaseSwings    = outsidePitches.filter(p =>
@@ -5947,6 +6468,11 @@ function renderBatterBreakdown(hits) {
     const chasePct = outsidePitches.length
       ? (100 * chaseSwings / outsidePitches.length).toFixed(1) + '%'
       : '—';
+
+    const bPAcount = new Set(
+      bp.filter(function(x){ return x.batter && x.inning; })
+        .map(function(x){ return x.inning + '-' + (x.topBottom||'') + '-' + x.batter; })
+    ).size;
 
     // Team label from hits if available, else from pitches
     const friendlyTeam = function(t) {
@@ -5962,7 +6488,7 @@ function renderBatterBreakdown(hits) {
         <div class="player-big-avatar" style="width:44px;height:44px;font-size:18px;background:rgba(34,197,94,.15);border:2px solid var(--green);color:var(--green)">${initials(b)}</div>
         <div>
           <div style="font-family:'Poppins',sans-serif;font-weight:900;font-size:20px">${formatName(b)}</div>
-          <div style="font-size:11px;color:var(--muted)">${bp.length} pitches seen${teamLabel}</div>
+          <div style="font-size:11px;color:var(--muted)">${bPAcount} PA · ${bp.length} pitches${teamLabel}</div>
         </div>
         <div style="margin-left:auto;font-size:11px;color:var(--muted)">${bh.length} batted balls</div>
       </div>
@@ -5974,12 +6500,12 @@ function renderBatterBreakdown(hits) {
         </div>
         <div style="background:rgba(255,255,255,.03);border-radius:6px;padding:10px;text-align:center">
           <div style="font-size:10px;color:var(--muted);letter-spacing:0.045em;text-transform:uppercase;margin-bottom:4px">Z-Swing %</div>
-          <div style="font-family:'Poppins',sans-serif;font-weight:900;font-size:24px;color:var(--accent)">${zSwingPct}</div>
+          <div style="font-family:'Poppins',sans-serif;font-weight:900;font-size:24px;color:${metricColor(zSwingVal, 'zSwing') || 'var(--accent)'}">${zSwingPct}</div>
           <div style="font-size:10px;color:var(--muted)">${zoneSwings}/${zonePitches.length} zone</div>
         </div>
         <div style="background:rgba(255,255,255,.03);border-radius:6px;padding:10px;text-align:center">
           <div style="font-size:10px;color:var(--muted);letter-spacing:0.045em;text-transform:uppercase;margin-bottom:4px">Chase %</div>
-          <div style="font-family:'Poppins',sans-serif;font-weight:900;font-size:24px;color:var(--accent2)">${chasePct}</div>
+          <div style="font-family:'Poppins',sans-serif;font-weight:900;font-size:24px;color:${metricColor(parseFloat(chasePct),'chase')||'var(--accent2)'}">${chasePct}</div>
           <div style="font-size:10px;color:var(--muted)">${chaseSwings}/${outsidePitches.length} outside</div>
         </div>
       </div>
@@ -6632,7 +7158,11 @@ function renderDecisionMaking(pitches) {
 
   var fmt = function(n) { return (isNaN(n)||!isFinite(n)) ? '--' : n.toFixed(1); };
 
-  document.getElementById('dm-chase-rate').textContent   = fmt(chaseRate);
+  var chaseEl = document.getElementById('dm-chase-rate');
+  if (chaseEl) {
+    chaseEl.textContent = fmt(chaseRate);
+    chaseEl.style.color = metricColor(chaseRate, 'chase') || '';
+  }
   document.getElementById('dm-chase-sub').textContent    = outsideSwings + ' swings on ' + outside.length + ' outside pitches';
   document.getElementById('dm-zone-contact').textContent = fmt(zoneWhiffPct);
   document.getElementById('dm-zone-sub').textContent     = insideWhiffs + ' whiffs on ' + insideSwings + ' zone swings';
@@ -6656,8 +7186,8 @@ function renderDecisionMaking(pitches) {
   var dmgScore = pitches.length > 0
     ? (100 * (zoneSwingsCount + ballsTaken) / pitches.length)
     : 0;
-  var dmgGrade = dmgScore >= 85 ? 'Elite' : dmgScore >= 75 ? 'Advanced' : dmgScore >= 65 ? 'Developing' : 'Focus Area';
-  var gradeColor = dmgScore >= 85 ? '#22c55e' : dmgScore >= 75 ? '#00c8ff' : dmgScore >= 65 ? '#eab308' : dmgScore >= 55 ? '#f97316' : '#ef4444';
+  var dmgGrade = dmgScore >= 86 ? 'Elite' : dmgScore >= 65 ? 'Advanced' : dmgScore >= 50 ? 'Developing' : 'Focus Area';
+  var gradeColor = dmgScore >= 86 ? '#22c55e' : dmgScore >= 65 ? '#00c8ff' : dmgScore >= 50 ? '#eab308' : dmgScore >= 35 ? '#f97316' : '#ef4444';
 
   var scoreEl  = document.getElementById('dm-grade-score');
   var letterEl = document.getElementById('dm-grade-letter');
@@ -6732,10 +7262,14 @@ function renderDecisionMaking(pitches) {
       if (!isTournamentMode && currentTeam !== 'ALL') {
         dmgPitchSource = pitches.filter(function(p) { return p.batterTeam === currentTeam; });
       }
-      var dmgBatterHits = isTournamentMode
-        ? (getFilteredBatterData().hits || [])
-        : rawData.hits.filter(function(h) { return currentTeam === 'ALL' || h.batterTeam === currentTeam; });
-      var dmgBatters = getUniqueBatters(dmgBatterHits);
+      var dmgBatters = [];
+      var dmgBatterSeen = {};
+      dmgPitchSource.forEach(function(p) {
+        if (p.batter && !dmgBatterSeen[p.batter]) {
+          dmgBatterSeen[p.batter] = true;
+          dmgBatters.push({ name: p.batter });
+        }
+      });
       var dmgCards = '';
       dmgBatters.forEach(function(b) {
         var bp = dmgPitchSource.filter(function(p) { return p.batter === b.name; });
@@ -6751,8 +7285,8 @@ function renderDecisionMaking(pitches) {
           return !(['StrikeSwinging','Foul','FoulTip','InPlay'].includes(p.pitchCall));
         }).length;
         var dmgScore = bp.length > 0 ? (zoneSwings + ballsTaken) / bp.length * 100 : 0;
-        var dmgLabel = dmgScore >= 85 ? 'Elite' : dmgScore >= 75 ? 'Advanced' : dmgScore >= 65 ? 'Developing' : 'Focus Area';
-        var dmgC = dmgScore >= 85 ? '#22c55e' : dmgScore >= 75 ? '#00c8ff' : dmgScore >= 65 ? '#eab308' : dmgScore >= 55 ? '#f97316' : '#ef4444';
+        var dmgLabel = dmgScore >= 86 ? 'Elite' : dmgScore >= 65 ? 'Advanced' : dmgScore >= 50 ? 'Developing' : 'Focus Area';
+        var dmgC = dmgScore >= 86 ? '#22c55e' : dmgScore >= 65 ? '#00c8ff' : dmgScore >= 50 ? '#eab308' : dmgScore >= 35 ? '#f97316' : '#ef4444';
         var zSwingPct = bZone.length ? zoneSwings / bZone.length * 100 : null;
         var goodEyePct = bOut.length ? ballsTaken / bOut.length * 100 : null;
         dmgCards += '<div class="coach-standout">' +
@@ -6760,7 +7294,7 @@ function renderDecisionMaking(pitches) {
             '<div style="font-size:10px;color:var(--muted);font-weight:400;">' + paCount + ' PA</div></div>' +
           '<div class="coach-standout-metrics">' +
             '<div class="coach-standout-chip"><div class="coach-standout-chip-label">Zone Swing %</div>' +
-              '<div class="coach-standout-chip-val">' + (zSwingPct != null ? zSwingPct.toFixed(1) : '--') + '<span style="font-size:9px;font-weight:400;color:var(--muted)">%</span></div></div>' +
+              '<div class="coach-standout-chip-val" style="color:' + (metricColor(zSwingPct, 'zSwing') || '#fff') + '">' + (zSwingPct != null ? zSwingPct.toFixed(1) : '--') + '<span style="font-size:9px;font-weight:400;color:var(--muted)">%</span></div></div>' +
             '<div class="coach-standout-chip"><div class="coach-standout-chip-label">Good Eye %</div>' +
               '<div class="coach-standout-chip-val" style="color:' + (metricColor(goodEyePct, 'goodEye') || '#fff') + '">' +
                 (goodEyePct != null ? goodEyePct.toFixed(1) : '--') + '<span style="font-size:9px;font-weight:400;color:var(--muted)">%</span></div></div>' +
@@ -7217,7 +7751,8 @@ function renderHitSummaryStats(pitches, hits) {
   el.innerHTML = [
     statCard('Z-Swing %', zSwingPct, '%',
       zoneSwings + ' swings on ' + zonePitches.length + ' zone pitches', 'accent',
-      'Zone Swing % measures how often the batter swings at pitches inside the strike zone. Elite hitters swing at zone pitches 65–80% of the time. A low Z-Swing % can mean the hitter is taking too many hittable pitches.'),
+      "How often the hitter swings at pitches inside the strike zone. Elite hitters are in the zone 65–87.5% of the time — aggressive but selective. Above 87.5% may indicate hacking at everything in the zone. Below 50% suggests the hitter is too passive on hittable pitches.<br><br><span style='font-size:10px;color:#8891a4'>Green: 65–87.5% · Yellow: 50–64.9% or >87.5% · Red: below 50%</span>",
+      metricColor(zonePitches.length ? 100 * zoneSwings / zonePitches.length : null, 'zSwing')),
     statCard('Whiff %', whiffPct, '%',
       whiffs + ' misses on ' + swings + ' swings', 'accent2',
       'Whiff % is the percentage of swings that result in a complete miss. Elite hitters are typically under 20%. A rate above 30% signals vulnerability to breaking balls or off-speed pitches and is a target pitchers will exploit.',
