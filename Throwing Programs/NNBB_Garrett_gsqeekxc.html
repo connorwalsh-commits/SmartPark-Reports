@@ -1,0 +1,264 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Program — No Name Baseball</title>
+<link href="https://fonts.googleapis.com/css2?family=Oswald:wght@400;500;600;700&family=Poppins:wght@300;400;500;600&display=swap" rel="stylesheet">
+<style>/* Athlete program view — styles for the exported athlete file.
+   Inlined into each generated file by exportAthlete() so athlete files stay self-contained. */
+  :root{--cream:#E6E2D9;--cream-3:#F0ECE3;--ink:#0D0D0D;--ink-soft:#1C1C1C;--line:rgba(13,13,13,0.12);--stitch:#C0392B;--stitch-2:#A5301F;--txt-mute:#6E6A5F;--sage:#7C8B5C;--gold:#B58B2A;}
+  *{box-sizing:border-box;margin:0;padding:0;}
+  html,body{background:var(--cream);color:var(--ink);font-family:'Poppins',sans-serif;-webkit-font-smoothing:antialiased;}
+  body{padding-bottom:40px;}
+  .wrap{max-width:560px;margin:0 auto;}
+  .hdr{background:var(--ink);color:var(--cream);padding:20px;}
+  .hdr .ey{font-size:10px;letter-spacing:3px;color:var(--stitch);font-weight:600;text-transform:uppercase;}
+  .hdr h1{font-family:'Oswald',sans-serif;font-weight:600;font-size:25px;text-transform:uppercase;letter-spacing:.5px;margin-top:5px;line-height:1;}
+  .hdr .sub{font-size:12px;color:#8A8676;margin-top:5px;}
+
+  /* program-wide stats (streak + overall completion) */
+  .topstats{display:flex;background:var(--cream-3);border-bottom:1px solid var(--line);}
+  .ts-cell{flex:1;padding:13px 20px;}
+  .ts-cell+.ts-cell{border-left:1px solid var(--line);}
+  .ts-num{font-family:'Oswald',sans-serif;font-size:23px;font-weight:700;line-height:1;color:var(--ink);}
+  .ts-streak .ts-num{color:var(--stitch);}
+  .ts-lbl{font-size:10px;letter-spacing:1.5px;text-transform:uppercase;color:var(--txt-mute);margin-top:5px;}
+  .ts-bar{height:5px;background:#fff;border:1px solid var(--line);border-radius:20px;overflow:hidden;margin-top:8px;}
+  .ts-bar .f{height:100%;background:var(--sage);width:0;transition:width .25s;}
+
+  .weeks{display:flex;gap:6px;padding:12px 14px 0;background:var(--cream-3);}
+  .weeks .wk{flex:1;text-align:center;font-family:'Oswald',sans-serif;font-size:12px;font-weight:600;letter-spacing:.5px;text-transform:uppercase;padding:10px 4px;border-radius:4px;background:#fff;border:1px solid var(--line);cursor:pointer;color:var(--ink);transition:.12s;}
+  .weeks .wk:hover{border-color:var(--stitch);}
+  .weeks .wk.active{background:var(--ink);border-color:var(--ink);color:var(--cream);}
+  .days{display:flex;gap:5px;padding:12px 14px;background:var(--cream-3);border-bottom:1px solid var(--line);overflow-x:auto;}
+  .day{flex:1 0 auto;min-width:40px;text-align:center;font-family:'Oswald',sans-serif;font-size:14px;font-weight:500;padding:9px 4px;border-radius:4px;background:#fff;border:1px solid var(--line);cursor:pointer;color:var(--ink);transition:.12s;}
+  .day:hover{border-color:var(--stitch);}
+  .day.active{background:var(--stitch);border-color:var(--stitch);color:#fff;}
+  .day.rest{opacity:.55;}
+  .day .dc{display:block;font-size:9px;opacity:.75;margin-top:2px;min-height:11px;}
+
+  /* per-day coaching layer */
+  .daymeta{padding:16px 14px 0;}
+  .dm-badges{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:12px;}
+  .intensity{font-family:'Oswald',sans-serif;font-size:11px;font-weight:600;letter-spacing:1px;text-transform:uppercase;padding:6px 12px;border-radius:20px;color:#fff;}
+  .int-recovery{background:var(--sage);}
+  .int-build{background:var(--gold);}
+  .int-high{background:var(--stitch);}
+  .est{display:inline-flex;align-items:center;gap:5px;font-family:'Oswald',sans-serif;font-size:12px;font-weight:600;letter-spacing:.5px;color:var(--ink);background:#fff;border:1px solid var(--line);border-radius:20px;padding:5px 12px;}
+  .est svg{width:13px;height:13px;stroke:var(--txt-mute);stroke-width:2;fill:none;}
+  .dm-card{background:#fff;border:1px solid var(--line);border-left:3px solid var(--stitch);border-radius:8px;padding:11px 13px;margin-bottom:10px;}
+  .dm-card.note{border-left-color:var(--ink);}
+  .dm-lbl{font-family:'Oswald',sans-serif;font-size:10px;font-weight:600;letter-spacing:1.5px;text-transform:uppercase;color:var(--stitch-2);margin-bottom:4px;}
+  .dm-card.note .dm-lbl{color:var(--ink-soft);}
+  .dm-card p{font-size:13px;line-height:1.5;color:var(--ink-soft);white-space:pre-wrap;}
+
+  .prog{padding:14px 20px 4px;}
+  .prog .row{display:flex;justify-content:space-between;font-size:12px;color:var(--txt-mute);margin-bottom:7px;}
+  .prog .bar{height:6px;background:#fff;border:1px solid var(--line);border-radius:20px;overflow:hidden;}
+  .prog .fill{height:100%;background:var(--stitch);width:0;transition:width .25s;}
+  .list{padding:8px 14px 20px;}
+  .blk{font-family:'Oswald',sans-serif;font-size:12px;font-weight:600;letter-spacing:1.5px;text-transform:uppercase;color:var(--stitch-2);margin:16px 4px 8px;}
+  .item{background:#fff;border:1px solid var(--line);border-radius:8px;padding:12px;margin-bottom:8px;display:flex;gap:12px;align-items:flex-start;}
+  .chk{width:28px;height:28px;border-radius:50%;border:2px solid var(--line);flex-shrink:0;cursor:pointer;display:flex;align-items:center;justify-content:center;background:#fff;transition:.12s;}
+  .chk:hover{border-color:var(--sage);}
+  .chk.done{background:var(--sage);border-color:var(--sage);}
+  .chk svg{width:15px;height:15px;stroke:#fff;stroke-width:3;fill:none;stroke-linecap:round;stroke-linejoin:round;display:none;}
+  .chk.done svg{display:block;}
+  .item .body{flex:1;min-width:0;}
+  .item .nm{font-size:15px;font-weight:600;line-height:1.25;}
+  .item.done .nm{text-decoration:line-through;color:var(--txt-mute);}
+  .item .meta{font-size:12px;color:var(--txt-mute);margin:3px 0 9px;line-height:1.45;}
+  .watch{display:inline-flex;align-items:center;gap:6px;font-family:'Oswald',sans-serif;font-size:12px;font-weight:600;letter-spacing:.5px;text-transform:uppercase;color:#fff;background:var(--stitch);border:none;border-radius:4px;padding:8px 13px;text-decoration:none;cursor:pointer;}
+  .watch:hover{background:var(--stitch-2);}
+  .watch.off{background:#B4B2A9;pointer-events:none;}
+  .rest-msg{text-align:center;padding:54px 20px;}
+  .rest-msg .big{font-family:'Oswald',sans-serif;font-size:28px;text-transform:uppercase;letter-spacing:1px;color:var(--ink);opacity:.32;}
+  .rest-msg .s{margin-top:8px;font-size:13px;color:var(--txt-mute);}
+  .empty{text-align:center;padding:46px 20px;color:var(--txt-mute);font-size:13px;}
+  .foot{text-align:center;padding:22px;font-family:'Oswald',sans-serif;font-size:12px;letter-spacing:3px;text-transform:uppercase;color:var(--txt-mute);}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="hdr">
+    <div class="ey">No Name Baseball</div>
+    <h1 id="hAthlete">Program</h1>
+    <div class="sub" id="hSub"></div>
+  </div>
+  <div class="topstats" id="topstats"></div>
+  <div class="weeks" id="weeks"></div>
+  <div class="days" id="days"></div>
+  <div id="view"></div>
+  <div class="foot">Throw hard. Stay healthy.</div>
+</div>
+
+<script id="PROGRAM_DATA" type="application/json">{"v":2,"id":"gsqeekxc","athlete":"Garrett","weeks":[{"days":{"Mon":{"rest":false,"mins":null,"intensity":"Build","note":"","focus":"","items":[{"name":"Shoulder A's, T's and Y's","block":"Mobility","why":"","video":"https://drive.google.com/file/d/1DZFOSf2Fk1MD3AMW63m7Uufty7S3MO4s/view?usp=sharing","dose":"1x10 Each"},{"name":"Band SH Mobility Series","block":"Mobility","why":"","video":"https://drive.google.com/file/d/1TPAqRYlvc_KGiDJbsGeMoJtQHe3aCfdd/view?usp=sharing","dose":"1x10"},{"name":"MB Up Downs","block":"Med Balls","why":"","video":"https://drive.google.com/file/d/1eRPZZ-38Ku464KBleZvfFGV9iiDn5BGk/view?usp=sharing","dose":"1x8 Each Side"},{"name":"MB Sitting Throws","block":"Med Balls","why":"","video":"https://drive.google.com/file/d/1ydg0cmjjZHbsfgO9TFyJn91YNmVxVCZZ/view?usp=sharing","dose":"1x8"},{"name":"Push Throws","block":"Med Balls","why":"","video":"https://drive.google.com/file/d/18uTBdET7sOgHEgJGqiNlngjGCnLfNovE/view?usp=sharing","dose":"1x8 Each Side"},{"name":"MoundWork 1","block":"Waterbag","why":"","video":"https://drive.google.com/file/d/1vQjZkc1oscz082xL1xT8zUA60WHXzODE/view?usp=sharing","dose":"Feel"},{"name":"Dumbbell Series *","block":"Armcare","why":"","video":"https://drive.google.com/file/d/1vdtbiELrEzZIw5yRYTDYFP68rj81s_VI/view?usp=sharing","dose":"1x8 Each"},{"name":"Resistance Bands Routine","block":"Armcare","why":"","video":"https://drive.google.com/file/d/1v44l_Y6qXV2H88rjDMjKGEskFpcKLsbS/view?usp=sharing","dose":"1x8 Each Exercise"},{"name":"High Intent","block":"Throwing","why":"","video":"https://drive.google.com/file/d/1Jp867MH0TiCUeDy_IdoCeBjndJ9GRm9l/view?usp=drive_link","dose":"Feel"},{"name":"Pivot Picks","block":"Armcare","why":"","video":"https://drive.google.com/file/d/1Ii1bRVmoPtnmOu3Cck6sICbf4oh7ZuAI/view?usp=sharing","dose":"5 Black/ 5 Green"},{"name":"Walk Ins","block":"Armcare","why":"","video":"https://drive.google.com/file/d/1kWDdmsjnehddlMWFgNzZdcgRaeP5ao-L/view?usp=sharing","dose":"5 Green/ 5 Blue"},{"name":"Gloveside Turns","block":"Armcare","why":"","video":"https://drive.google.com/file/d/1TwPWzH_65uU7t3jNrwBXOlAY-c3c9o1V/view?usp=sharing","dose":"2 Sets (1 throw Blue, 1 Throw Red, 1 Throw Yellow, 1 throw Grey)"},{"name":"Resistance Bands Routine","block":"Post Throwing Armcare","why":"","video":"https://drive.google.com/file/d/1v44l_Y6qXV2H88rjDMjKGEskFpcKLsbS/view?usp=sharing","dose":"1x10"},{"name":"Dumbbell Series *","block":"Post Throwing Armcare","why":"","video":"https://drive.google.com/file/d/1vdtbiELrEzZIw5yRYTDYFP68rj81s_VI/view?usp=sharing","dose":"2x8"}]},"Tue":{"rest":false,"mins":null,"intensity":"Recovery","note":"","focus":"","items":[{"name":"Shoulder A's, T's and Y's","block":"Mobility","why":"","video":"https://drive.google.com/file/d/1DZFOSf2Fk1MD3AMW63m7Uufty7S3MO4s/view?usp=sharing","dose":"2x8"},{"name":"Band SH Mobility Series","block":"Mobility","why":"","video":"https://drive.google.com/file/d/1TPAqRYlvc_KGiDJbsGeMoJtQHe3aCfdd/view?usp=sharing","dose":"2x8"},{"name":"MoundWork 1","block":"Waterbag","why":"","video":"https://drive.google.com/file/d/1vQjZkc1oscz082xL1xT8zUA60WHXzODE/view?usp=sharing","dose":"1x8-10"},{"name":"Dumbbell Series *","block":"Armcare","why":"","video":"https://drive.google.com/file/d/1vdtbiELrEzZIw5yRYTDYFP68rj81s_VI/view?usp=sharing","dose":"1x8"},{"name":"Resistance Bands Routine","block":"Armcare","why":"","video":"https://drive.google.com/file/d/1v44l_Y6qXV2H88rjDMjKGEskFpcKLsbS/view?usp=sharing","dose":"1x8"},{"name":"Resistance Bands Routine","block":"Post Throwing Armcare","why":"","video":"https://drive.google.com/file/d/1v44l_Y6qXV2H88rjDMjKGEskFpcKLsbS/view?usp=sharing","dose":"2x10"},{"name":"Mound Uphills","block":"Waterbag","why":"","video":"https://drive.google.com/file/d/1cUczY9r6v9zql1L7BGv6fnjUubR8-5Tw/view?usp=sharing","dose":"1x8-10"},{"name":"Dumbbell Series *","block":"Post Throwing Armcare","why":"","video":"https://drive.google.com/file/d/1vdtbiELrEzZIw5yRYTDYFP68rj81s_VI/view?usp=sharing","dose":"2x10"},{"name":"KB Swing","block":"Kettlebell","why":"","video":"https://drive.google.com/file/d/1ThaobNZVJNBf-HCNKU-2EZx6qfXmv8la/view?usp=sharing","dose":"3x15"},{"name":"KB Corkscrews","block":"Kettlebell","why":"","video":"https://drive.google.com/file/d/1sUCsCxOZF9Lk2SOIu3xLAI2ehLPmcPpD/view?usp=sharing","dose":"3x10 Each"},{"name":"KB Windmills","block":"Kettlebell","why":"","video":"https://drive.google.com/file/d/1-_hABO6kh1SlnIPrucOmhPs7Z1JufN2S/view?usp=sharing","dose":"3x10 Each Arm"},{"name":"KB Half Get Up","block":"Kettlebell","why":"","video":"https://drive.google.com/file/d/1ugKjEIUzuo8cbuCHXvo7o3pVm8BOC5D-/view?usp=sharing","dose":"3x10 Each"},{"name":"KB Swing to Goblet Squat","block":"Kettlebell","why":"","video":"https://drive.google.com/file/d/1arFEWQk5IPmCt3MAQgd2kaAHTqNca4qS/view?usp=sharing","dose":"3x10 Each"}]},"Wed":{"rest":false,"mins":null,"intensity":"Build","note":"","focus":"","items":[{"name":"Shoulder A's, T's and Y's","block":"Mobility","why":"","video":"https://drive.google.com/file/d/1DZFOSf2Fk1MD3AMW63m7Uufty7S3MO4s/view?usp=sharing","dose":"1x10 Each"},{"name":"Band SH Mobility Series","block":"Mobility","why":"","video":"https://drive.google.com/file/d/1TPAqRYlvc_KGiDJbsGeMoJtQHe3aCfdd/view?usp=sharing","dose":"1x10"},{"name":"MB Up Downs","block":"Med Balls","why":"","video":"https://drive.google.com/file/d/1eRPZZ-38Ku464KBleZvfFGV9iiDn5BGk/view?usp=sharing","dose":"1x8 Each Side"},{"name":"MB Sitting Throws","block":"Med Balls","why":"","video":"https://drive.google.com/file/d/1ydg0cmjjZHbsfgO9TFyJn91YNmVxVCZZ/view?usp=sharing","dose":"1x8"},{"name":"Push Throws","block":"Med Balls","why":"","video":"https://drive.google.com/file/d/18uTBdET7sOgHEgJGqiNlngjGCnLfNovE/view?usp=sharing","dose":"1x8 Each Side"},{"name":"MoundWork 1","block":"Waterbag","why":"","video":"https://drive.google.com/file/d/1vQjZkc1oscz082xL1xT8zUA60WHXzODE/view?usp=sharing","dose":"Feel"},{"name":"Dumbbell Series *","block":"Armcare","why":"","video":"https://drive.google.com/file/d/1vdtbiELrEzZIw5yRYTDYFP68rj81s_VI/view?usp=sharing","dose":"1x8 Each"},{"name":"Resistance Bands Routine","block":"Armcare","why":"","video":"https://drive.google.com/file/d/1v44l_Y6qXV2H88rjDMjKGEskFpcKLsbS/view?usp=sharing","dose":"1x8 Each Exercise"},{"name":"Pivot Picks","block":"Armcare","why":"","video":"https://drive.google.com/file/d/1Ii1bRVmoPtnmOu3Cck6sICbf4oh7ZuAI/view?usp=sharing","dose":"5 Black/ 5 Green"},{"name":"Walk Ins","block":"Armcare","why":"","video":"https://drive.google.com/file/d/1kWDdmsjnehddlMWFgNzZdcgRaeP5ao-L/view?usp=sharing","dose":"5 Green/ 5 Blue"},{"name":"Gloveside Turns","block":"Armcare","why":"","video":"https://drive.google.com/file/d/1TwPWzH_65uU7t3jNrwBXOlAY-c3c9o1V/view?usp=sharing","dose":"2 Sets (1 throw Blue, 1 Throw Red, 1 Throw Yellow, 1 throw Grey)"},{"name":"Resistance Bands Routine","block":"Post Throwing Armcare","why":"","video":"https://drive.google.com/file/d/1v44l_Y6qXV2H88rjDMjKGEskFpcKLsbS/view?usp=sharing","dose":"1x10"},{"name":"Dumbbell Series *","block":"Post Throwing Armcare","why":"","video":"https://drive.google.com/file/d/1vdtbiELrEzZIw5yRYTDYFP68rj81s_VI/view?usp=sharing","dose":"2x8"},{"name":"Medium Intent","block":"Throwing","why":"","video":"https://drive.google.com/file/d/1bR81gYrhfC-Gg76UtCW7eUTETjnU8kw0/view?usp=drive_link","dose":""}]},"Thu":{"rest":false,"mins":null,"intensity":"Recovery","note":"","focus":"","items":[{"name":"Shoulder A's, T's and Y's","block":"Mobility","why":"","video":"https://drive.google.com/file/d/1DZFOSf2Fk1MD3AMW63m7Uufty7S3MO4s/view?usp=sharing","dose":"2x8"},{"name":"Band SH Mobility Series","block":"Mobility","why":"","video":"https://drive.google.com/file/d/1TPAqRYlvc_KGiDJbsGeMoJtQHe3aCfdd/view?usp=sharing","dose":"2x8"},{"name":"MoundWork 1","block":"Waterbag","why":"","video":"https://drive.google.com/file/d/1vQjZkc1oscz082xL1xT8zUA60WHXzODE/view?usp=sharing","dose":"1x8-10"},{"name":"Dumbbell Series *","block":"Armcare","why":"","video":"https://drive.google.com/file/d/1vdtbiELrEzZIw5yRYTDYFP68rj81s_VI/view?usp=sharing","dose":"1x8"},{"name":"Resistance Bands Routine","block":"Armcare","why":"","video":"https://drive.google.com/file/d/1v44l_Y6qXV2H88rjDMjKGEskFpcKLsbS/view?usp=sharing","dose":"1x8"},{"name":"Resistance Bands Routine","block":"Post Throwing Armcare","why":"","video":"https://drive.google.com/file/d/1v44l_Y6qXV2H88rjDMjKGEskFpcKLsbS/view?usp=sharing","dose":"2x10"},{"name":"Mound Uphills","block":"Waterbag","why":"","video":"https://drive.google.com/file/d/1cUczY9r6v9zql1L7BGv6fnjUubR8-5Tw/view?usp=sharing","dose":"1x8-10"},{"name":"Dumbbell Series *","block":"Post Throwing Armcare","why":"","video":"https://drive.google.com/file/d/1vdtbiELrEzZIw5yRYTDYFP68rj81s_VI/view?usp=sharing","dose":"2x10"},{"name":"KB Swing","block":"Kettlebell","why":"","video":"https://drive.google.com/file/d/1ThaobNZVJNBf-HCNKU-2EZx6qfXmv8la/view?usp=sharing","dose":"3x15"},{"name":"KB Corkscrews","block":"Kettlebell","why":"","video":"https://drive.google.com/file/d/1sUCsCxOZF9Lk2SOIu3xLAI2ehLPmcPpD/view?usp=sharing","dose":"3x10 Each"},{"name":"KB Windmills","block":"Kettlebell","why":"","video":"https://drive.google.com/file/d/1-_hABO6kh1SlnIPrucOmhPs7Z1JufN2S/view?usp=sharing","dose":"3x10 Each Arm"},{"name":"KB Half Get Up","block":"Kettlebell","why":"","video":"https://drive.google.com/file/d/1ugKjEIUzuo8cbuCHXvo7o3pVm8BOC5D-/view?usp=sharing","dose":"3x10 Each"},{"name":"KB Swing to Goblet Squat","block":"Kettlebell","why":"","video":"https://drive.google.com/file/d/1arFEWQk5IPmCt3MAQgd2kaAHTqNca4qS/view?usp=sharing","dose":"3x10 Each"}]},"Fri":{"rest":false,"mins":null,"intensity":"Build","note":"","focus":"","items":[{"name":"Shoulder A's, T's and Y's","block":"Mobility","why":"","video":"https://drive.google.com/file/d/1DZFOSf2Fk1MD3AMW63m7Uufty7S3MO4s/view?usp=sharing","dose":"1x10 Each"},{"name":"Band SH Mobility Series","block":"Mobility","why":"","video":"https://drive.google.com/file/d/1TPAqRYlvc_KGiDJbsGeMoJtQHe3aCfdd/view?usp=sharing","dose":"1x10"},{"name":"MB Up Downs","block":"Med Balls","why":"","video":"https://drive.google.com/file/d/1eRPZZ-38Ku464KBleZvfFGV9iiDn5BGk/view?usp=sharing","dose":"1x8 Each Side"},{"name":"MB Sitting Throws","block":"Med Balls","why":"","video":"https://drive.google.com/file/d/1ydg0cmjjZHbsfgO9TFyJn91YNmVxVCZZ/view?usp=sharing","dose":"1x8"},{"name":"Push Throws","block":"Med Balls","why":"","video":"https://drive.google.com/file/d/18uTBdET7sOgHEgJGqiNlngjGCnLfNovE/view?usp=sharing","dose":"1x8 Each Side"},{"name":"MoundWork 1","block":"Waterbag","why":"","video":"https://drive.google.com/file/d/1vQjZkc1oscz082xL1xT8zUA60WHXzODE/view?usp=sharing","dose":"Feel"},{"name":"Dumbbell Series *","block":"Armcare","why":"","video":"https://drive.google.com/file/d/1vdtbiELrEzZIw5yRYTDYFP68rj81s_VI/view?usp=sharing","dose":"1x8 Each"},{"name":"Resistance Bands Routine","block":"Armcare","why":"","video":"https://drive.google.com/file/d/1v44l_Y6qXV2H88rjDMjKGEskFpcKLsbS/view?usp=sharing","dose":"1x8 Each Exercise"},{"name":"High Intent","block":"Throwing","why":"","video":"https://drive.google.com/file/d/1Jp867MH0TiCUeDy_IdoCeBjndJ9GRm9l/view?usp=drive_link","dose":"Feel"},{"name":"Pivot Picks","block":"Armcare","why":"","video":"https://drive.google.com/file/d/1Ii1bRVmoPtnmOu3Cck6sICbf4oh7ZuAI/view?usp=sharing","dose":"5 Black/ 5 Green"},{"name":"Walk Ins","block":"Armcare","why":"","video":"https://drive.google.com/file/d/1kWDdmsjnehddlMWFgNzZdcgRaeP5ao-L/view?usp=sharing","dose":"5 Green/ 5 Blue"},{"name":"Gloveside Turns","block":"Armcare","why":"","video":"https://drive.google.com/file/d/1TwPWzH_65uU7t3jNrwBXOlAY-c3c9o1V/view?usp=sharing","dose":"2 Sets (1 throw Blue, 1 Throw Red, 1 Throw Yellow, 1 throw Grey)"},{"name":"Resistance Bands Routine","block":"Post Throwing Armcare","why":"","video":"https://drive.google.com/file/d/1v44l_Y6qXV2H88rjDMjKGEskFpcKLsbS/view?usp=sharing","dose":"1x10"},{"name":"Dumbbell Series *","block":"Post Throwing Armcare","why":"","video":"https://drive.google.com/file/d/1vdtbiELrEzZIw5yRYTDYFP68rj81s_VI/view?usp=sharing","dose":"2x8"}]},"Sat":{"rest":false,"mins":42,"intensity":"","note":"","focus":"","items":[{"name":"KB Thruster","block":"Kettlebell","why":"","video":"https://drive.google.com/file/d/19Lb4XWGIb7f1TqHefZZY3JwmtqWwMX2c/view?usp=sharing","dose":"4x10"},{"name":"KB Half Get Up","block":"Kettlebell","why":"","video":"https://drive.google.com/file/d/1ugKjEIUzuo8cbuCHXvo7o3pVm8BOC5D-/view?usp=sharing","dose":"4x10 Each"},{"name":"KB SL Swings","block":"Kettlebell","why":"","video":"https://drive.google.com/file/d/10rDrrxcjPGD0G4nxoJKbjV16gbJNlJTB/view?usp=sharing","dose":"4x10"},{"name":"KB SA Swing","block":"Kettlebell","why":"","video":"https://drive.google.com/file/d/1qSJB-9g7oduXUppb5JpIZUPFuiiOtF4t/view?usp=sharing","dose":"4x10"},{"name":"KB SL RDL","block":"Kettlebell","why":"","video":"https://drive.google.com/file/d/1aY7diq1GOiut1rZr-2OEJzb8DVg2Jtgi/view?usp=sharing","dose":"4x10"},{"name":"KB Single Arm Press","block":"Kettlebell","why":"","video":"https://drive.google.com/file/d/1VWbevWSpW2vNFPrFbvQjFXOzebN3Kost/view?usp=sharing","dose":"4x10"}]},"Sun":{"rest":true,"mins":null,"intensity":"","note":"","focus":"","items":[]}}},{"days":{"Mon":{"rest":false,"mins":null,"intensity":"","note":"","focus":"","items":[]},"Tue":{"rest":false,"mins":null,"intensity":"","note":"","focus":"","items":[]},"Wed":{"rest":false,"mins":null,"intensity":"","note":"","focus":"","items":[]},"Thu":{"rest":false,"mins":null,"intensity":"","note":"","focus":"","items":[]},"Fri":{"rest":false,"mins":null,"intensity":"","note":"","focus":"","items":[]},"Sat":{"rest":false,"mins":null,"intensity":"","note":"","focus":"","items":[]},"Sun":{"rest":false,"mins":null,"intensity":"","note":"","focus":"","items":[]}}},{"days":{"Mon":{"rest":false,"mins":null,"intensity":"","note":"","focus":"","items":[]},"Tue":{"rest":false,"mins":null,"intensity":"","note":"","focus":"","items":[]},"Wed":{"rest":false,"mins":null,"intensity":"","note":"","focus":"","items":[]},"Thu":{"rest":false,"mins":null,"intensity":"","note":"","focus":"","items":[]},"Fri":{"rest":false,"mins":null,"intensity":"","note":"","focus":"","items":[]},"Sat":{"rest":false,"mins":null,"intensity":"","note":"","focus":"","items":[]},"Sun":{"rest":false,"mins":null,"intensity":"","note":"","focus":"","items":[]}}},{"days":{"Mon":{"rest":false,"mins":null,"intensity":"","note":"","focus":"","items":[]},"Tue":{"rest":false,"mins":null,"intensity":"","note":"","focus":"","items":[]},"Wed":{"rest":false,"mins":null,"intensity":"","note":"","focus":"","items":[]},"Thu":{"rest":false,"mins":null,"intensity":"","note":"","focus":"","items":[]},"Fri":{"rest":false,"mins":null,"intensity":"","note":"","focus":"","items":[]},"Sat":{"rest":false,"mins":null,"intensity":"","note":"","focus":"","items":[]},"Sun":{"rest":false,"mins":null,"intensity":"","note":"","focus":"","items":[]}}}]}</script>
+<script>
+(function(){
+  var DAYS=["Mon","Tue","Wed","Thu","Fri","Sat","Sun"];
+  var FULL={Mon:"Monday",Tue:"Tuesday",Wed:"Wednesday",Thu:"Thursday",Fri:"Friday",Sat:"Saturday",Sun:"Sunday"};
+  var BLOCKS=["Mobility","Misc","Med Balls","Waterbag","Armcare","Throwing Drills","Throwing","Post Throwing Armcare","Kettlebell"];
+  var INT_CLASS={"Recovery":"int-recovery","Build":"int-build","High Intent":"int-high"};
+
+  var P;
+  try{ P=JSON.parse(document.getElementById('PROGRAM_DATA').textContent); }catch(e){ P=null; }
+  // v2 = {weeks:[{days}]}; v1 (older files) = {days}
+  var WEEKS = (P && P.weeks && P.weeks.length) ? P.weeks : (P && P.days ? [{days:P.days}] : null);
+  if(!P || !WEEKS){ document.getElementById('view').innerHTML='<div class="empty">This program couldn’t load.</div>'; return; }
+
+  var SKEY='nnbb_athlete_'+(P.id||'x')+'_done';
+  var DKEY='nnbb_athlete_'+(P.id||'x')+'_dates';   // calendar days on which anything was completed (for streak)
+  function getDone(){ try{ return JSON.parse(localStorage.getItem(SKEY)||'{}')||{}; }catch(e){ return {}; } }
+  function setDone(m){ try{ localStorage.setItem(SKEY,JSON.stringify(m)); }catch(e){} }
+  function getDates(){ try{ return JSON.parse(localStorage.getItem(DKEY)||'[]')||[]; }catch(e){ return []; } }
+  function setDates(a){ try{ localStorage.setItem(DKEY,JSON.stringify(a)); }catch(e){} }
+  var done=getDone();
+
+  function esc(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+  function attr(s){ return esc(s).replace(/"/g,'&quot;'); }
+  function daysOf(i){ return (WEEKS[i] && WEEKS[i].days) || {}; }
+  function hasContent(i,d){ var x=daysOf(i)[d]; return !!(x && !x.rest && x.items && x.items.length); }
+  function todayKey(){ var js=(new Date()).getDay(); return DAYS[(js+6)%7]; }
+
+  // ---- dates + streak (consecutive calendar days trained) ----
+  function dateStr(d){ return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); }
+  function markToday(){
+    var t=dateStr(new Date()); var a=getDates();
+    if(a.indexOf(t)===-1){ a.push(t); setDates(a); }
+  }
+  function computeStreak(){
+    var set={}; getDates().forEach(function(d){ set[d]=1; });
+    var day=new Date(); day.setHours(0,0,0,0);
+    if(!set[dateStr(day)]){ day.setDate(day.getDate()-1); if(!set[dateStr(day)]) return 0; } // today or (if not yet trained today) yesterday
+    var n=0;
+    while(set[dateStr(day)]){ n++; day.setDate(day.getDate()-1); }
+    return n;
+  }
+
+  // ---- overall completion across all 4 weeks ----
+  function overall(){
+    var total=0, comp=0;
+    WEEKS.forEach(function(w,i){
+      var ds=(w&&w.days)||{};
+      DAYS.forEach(function(d){
+        var x=ds[d]; if(!x||x.rest||!x.items) return;
+        x.items.forEach(function(_,idx){ total++; if(done[i+':'+d+':'+idx]) comp++; });
+      });
+    });
+    return {total:total, comp:comp, pct: total?Math.round(comp/total*100):0};
+  }
+
+  var wi=0;                 // athletes start on Week 1
+  var cur=todayKey();       // ...and today, if it has drills; else first day that does
+  if(!hasContent(wi,cur)){ for(var i=0;i<DAYS.length;i++){ if(hasContent(wi,DAYS[i])){ cur=DAYS[i]; break; } } }
+
+  document.getElementById('hAthlete').textContent = P.athlete ? (P.athlete+"’s program") : "Program";
+
+  function renderTop(){
+    var o=overall(), st=computeStreak();
+    document.getElementById('topstats').innerHTML =
+      '<div class="ts-cell"><div class="ts-num">'+o.pct+'%</div><div class="ts-lbl">4-week progress</div>'
+        +'<div class="ts-bar"><div class="f" style="width:'+o.pct+'%"></div></div></div>'
+      +'<div class="ts-cell ts-streak"><div class="ts-num">'+st+'</div><div class="ts-lbl">day streak'+(st===1?'':'')+'</div></div>';
+  }
+
+  function renderWeeks(){
+    var host=document.getElementById('weeks');
+    if(WEEKS.length<=1){ host.style.display='none'; return; }
+    host.style.display='flex'; host.innerHTML='';
+    WEEKS.forEach(function(_,i){
+      var el=document.createElement('div');
+      el.className='wk'+(i===wi?' active':'');
+      el.textContent='Week '+(i+1);
+      el.onclick=function(){ wi=i; render(); };
+      host.appendChild(el);
+    });
+  }
+
+  function renderDays(){
+    var host=document.getElementById('days'); host.innerHTML='';
+    DAYS.forEach(function(d){
+      var info=daysOf(wi)[d]||{items:[]};
+      var el=document.createElement('div');
+      el.className='day'+(d===cur?' active':'')+(info.rest?' rest':'');
+      var cnt=info.rest?'rest':((info.items&&info.items.length)?String(info.items.length):'');
+      el.innerHTML=d.charAt(0)+'<span class="dc">'+cnt+'</span>';
+      el.onclick=function(){ cur=d; render(); };
+      host.appendChild(el);
+    });
+  }
+
+  function dayMetaHtml(info){
+    var badges='';
+    if(info.intensity && INT_CLASS[info.intensity]){
+      badges+='<span class="intensity '+INT_CLASS[info.intensity]+'">'+esc(info.intensity)+'</span>';
+    }
+    if(info.mins){
+      badges+='<span class="est"><svg viewBox="0 0 24 24"><circle cx="12" cy="13" r="8"></circle><path d="M12 9v4l2 2M12 2h0"></path></svg>~'+parseInt(info.mins,10)+' min</span>';
+    }
+    var html='';
+    if(badges) html+='<div class="dm-badges">'+badges+'</div>';
+    if(info.focus && info.focus.trim()) html+='<div class="dm-card"><div class="dm-lbl">Why we’re doing this</div><p>'+esc(info.focus.trim())+'</p></div>';
+    if(info.note && info.note.trim()) html+='<div class="dm-card note"><div class="dm-lbl">Coach’s note</div><p>'+esc(info.note.trim())+'</p></div>';
+    return html ? '<div class="daymeta">'+html+'</div>' : '';
+  }
+
+  function render(){
+    renderTop();
+    renderWeeks();
+    renderDays();
+    var info=daysOf(wi)[cur]||{rest:false,items:[]};
+    document.getElementById('hSub').textContent='Week '+(wi+1)+' · '+FULL[cur];
+    var view=document.getElementById('view');
+
+    if(info.rest){
+      view.innerHTML=dayMetaHtml(info)+'<div class="rest-msg"><div class="big">Rest Day</div><div class="s">Recover, hydrate, come back ready.</div></div>';
+      return;
+    }
+    var items=info.items||[];
+    if(!items.length){ view.innerHTML=dayMetaHtml(info)+'<div class="empty">Nothing programmed for '+FULL[cur]+'.</div>'; return; }
+
+    var total=items.length, comp=0;
+    items.forEach(function(_,i){ if(done[wi+':'+cur+':'+i]) comp++; });
+    var pct=total?Math.round(comp/total*100):0;
+
+    var html=dayMetaHtml(info)
+      +'<div class="prog"><div class="row"><span>Today’s progress</span><span>'+comp+' of '+total+' done</span></div>'
+      +'<div class="bar"><div class="fill" style="width:'+pct+'%"></div></div></div><div class="list">';
+
+    var grouped={};
+    items.forEach(function(it,i){ var b=BLOCKS.indexOf(it.block)>-1?it.block:'Misc'; (grouped[b]=grouped[b]||[]).push({it:it,i:i}); });
+    BLOCKS.forEach(function(b){
+      if(!grouped[b]) return;
+      html+='<div class="blk">'+esc(b)+'</div>';
+      grouped[b].forEach(function(o){
+        var it=o.it, i=o.i, key=wi+':'+cur+':'+i, isDone=!!done[key];
+        var meta=[it.dose,it.why].filter(Boolean).map(esc).join(' · ');
+        var watch = it.video
+          ? '<a class="watch" href="'+attr(it.video)+'" target="_blank" rel="noopener"><svg viewBox="0 0 24 24" width="12" height="12" fill="currentColor"><path d="M8 5v14l11-7z"></path></svg>Watch video</a>'
+          : '<span class="watch off">No video yet</span>';
+        html+='<div class="item'+(isDone?' done':'')+'">'
+          +'<div class="chk'+(isDone?' done':'')+'" data-k="'+key+'"><svg viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"></polyline></svg></div>'
+          +'<div class="body"><div class="nm">'+esc(it.name)+'</div>'
+          +(meta?'<div class="meta">'+meta+'</div>':'')+watch+'</div></div>';
+      });
+    });
+    html+='</div>';
+    view.innerHTML=html;
+
+    [].forEach.call(view.querySelectorAll('.chk'),function(c){
+      c.onclick=function(){
+        var k=c.getAttribute('data-k');
+        if(done[k]){ delete done[k]; }
+        else { done[k]=1; markToday(); }   // completing anything counts today toward the streak
+        setDone(done); render();
+      };
+    });
+  }
+
+  render();
+})();
+</script>
+</body>
+</html>
